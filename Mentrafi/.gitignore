@@ -51,5 +51,6 @@ app-example
 readme.md
 git rm --cached README.md
 THEME_IMPLEMENTATION.md
+Mentrafi/utils/api.ts
+/utils/api.ts
 Mentrafi/utils/
-Mentrafi/api.ts
