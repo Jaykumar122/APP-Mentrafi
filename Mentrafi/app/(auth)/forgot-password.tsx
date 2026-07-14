@@ -1,132 +1,327 @@
-import { useRouter } from "expo-router";
+import { router } from "expo-router";
+import { ArrowLeft, CheckCircle, Eye, EyeOff, Mail } from "lucide-react-native";
 import { useState } from "react";
 import {
-    ActivityIndicator,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StatusBar,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  LinearTransition,
+} from "react-native-reanimated";
 
-type Step = "email" | "otp" | "password";
+type Step = "email" | "otp" | "password" | "success";
+
+const C = {
+  background: "#0d1b2a",
+  accent: "#b8943a",
+  accentGlow: "rgba(184,148,58,0.15)",
+  surface: "#f5f6f8",
+  textPrimary: "#0d1b2a",
+  textMuted: "#6b7280",
+  border: "rgba(13,27,42,0.1)",
+  white40: "rgba(255,255,255,0.40)",
+  white55: "rgba(255,255,255,0.55)",
+  white18: "rgba(255,255,255,0.18)",
+  error: "#dc2626",
+  errorBg: "#fee2e2",
+  success: "#22c55e",
+};
+
+const titleFont = Platform.select({
+  ios: "Georgia",
+  android: "serif",
+  default: undefined,
+});
+
+function BrandLogo() {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+      <View
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: 14,
+          borderWidth: 1.5,
+          borderColor: C.accent,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "rgba(184,148,58,0.08)",
+        }}
+      >
+        <View
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: 4,
+            borderWidth: 1.5,
+            borderColor: C.accent,
+          }}
+        />
+      </View>
+      <Text
+        style={{
+          color: "#fff",
+          fontSize: 18,
+          fontWeight: "600",
+          fontFamily: titleFont,
+        }}
+      >
+        Mentrafi
+      </Text>
+    </View>
+  );
+}
+
+function Decorations() {
+  return (
+    <>
+      {/* Radial glow */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: -72,
+          right: -72,
+          width: 280,
+          height: 280,
+          borderRadius: 140,
+          backgroundColor: C.accentGlow,
+        }}
+      />
+      {/* Large gold circle */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: -24,
+          right: -24,
+          width: 144,
+          height: 144,
+          borderRadius: 72,
+          backgroundColor: C.accent,
+          opacity: 0.88,
+        }}
+      />
+      {/* Ghost circle */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: 180,
+          right: -64,
+          width: 168,
+          height: 168,
+          borderRadius: 84,
+          backgroundColor: "rgba(255,255,255,0.04)",
+          borderWidth: 1,
+          borderColor: "rgba(255,255,255,0.08)",
+        }}
+      />
+      {/* Gold-tinted circle */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: 220,
+          left: -52,
+          width: 136,
+          height: 136,
+          borderRadius: 68,
+          backgroundColor: C.accent,
+          opacity: 0.08,
+        }}
+      />
+      {/* Ring */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          bottom: 140,
+          left: -40,
+          width: 108,
+          height: 108,
+          borderRadius: 54,
+          borderWidth: 1,
+          borderColor: "rgba(184,148,58,0.14)",
+        }}
+      />
+    </>
+  );
+}
+
+interface InputFieldProps {
+  label: string;
+  value: string;
+  onChangeText: (v: string) => void;
+  placeholder: string;
+  icon: React.ReactNode;
+  isFocused: boolean;
+  onFocus: () => void;
+  onBlur: () => void;
+  keyboardType?: "default" | "email-address" | "phone-pad" | "numeric";
+  autoCapitalize?: "none" | "words" | "sentences";
+  secureTextEntry?: boolean;
+  rightElement?: React.ReactNode;
+  error?: string;
+  maxLength?: number;
+}
+
+function InputField({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  icon,
+  isFocused,
+  onFocus,
+  onBlur,
+  keyboardType = "default",
+  autoCapitalize = "sentences",
+  secureTextEntry = false,
+  rightElement,
+  error,
+  maxLength,
+}: InputFieldProps) {
+  return (
+    <View style={{ marginBottom: 16 }}>
+      <Text
+        style={{
+          fontSize: 12,
+          fontWeight: "600",
+          color: C.textMuted,
+          marginBottom: 8,
+        }}
+      >
+        {label}
+      </Text>
+      <View
+        style={{
+          minHeight: 52,
+          borderRadius: 14,
+          borderWidth: 1.5,
+          borderColor: error ? C.error : isFocused ? C.accent : C.border,
+          backgroundColor: C.surface,
+          paddingHorizontal: 14,
+          flexDirection: "row",
+          alignItems: "center",
+        }}
+      >
+        <View style={{ marginRight: 10 }}>{icon}</View>
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={C.textMuted}
+          keyboardType={keyboardType}
+          autoCapitalize={autoCapitalize}
+          secureTextEntry={secureTextEntry}
+          onFocus={onFocus}
+          onBlur={onBlur}
+          maxLength={maxLength}
+          style={{
+            flex: 1,
+            paddingVertical: Platform.OS === "ios" ? 15 : 12,
+            fontSize: 14,
+            color: C.textPrimary,
+          }}
+        />
+        {rightElement}
+      </View>
+      {error ? (
+        <Text style={{ color: C.error, fontSize: 11, marginTop: 5, marginLeft: 2 }}>
+          {error}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
 
 export default function ForgotPasswordScreen() {
-  const router = useRouter();
   const [step, setStep] = useState<Step>("email");
   const [emailOrPhone, setEmailOrPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [errors, setErrors] = useState<{ [key: string]: string }>({});
-  const [successMessage, setSuccessMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [focused, setFocused] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const validateEmail = () => {
-    const newErrors: { [key: string]: string } = {};
-
-    if (!emailOrPhone.trim()) {
-      newErrors.emailOrPhone = "Email or phone number is required";
-    } else {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      const phoneRegex = /^[0-9]{10,}$/;
-
-      if (!emailRegex.test(emailOrPhone) && !phoneRegex.test(emailOrPhone)) {
-        newErrors.emailOrPhone = "Please enter a valid email or phone number";
-      }
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const validateOTP = () => {
-    const newErrors: { [key: string]: string } = {};
-
-    if (!otp.trim()) {
-      newErrors.otp = "OTP is required";
-    } else if (otp.length !== 6) {
-      newErrors.otp = "OTP must be 6 digits";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const validatePassword = () => {
-    const newErrors: { [key: string]: string } = {};
-
-    if (!newPassword.trim()) {
-      newErrors.newPassword = "New password is required";
-    } else if (newPassword.length < 6) {
-      newErrors.newPassword = "Password must be at least 6 characters";
-    }
-
-    if (!confirmPassword.trim()) {
-      newErrors.confirmPassword = "Please confirm your password";
-    } else if (newPassword !== confirmPassword) {
-      newErrors.confirmPassword = "Passwords do not match";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+  const f = (key: string) => ({
+    isFocused: focused === key,
+    onFocus: () => setFocused(key),
+    onBlur: () => setFocused(null),
+  });
 
   const handleSendOTP = async () => {
-    if (!validateEmail()) return;
-
-    setIsLoading(true);
-    try {
-      // TODO: Replace with actual API call to send OTP
-      setTimeout(() => {
-        setIsLoading(false);
-        setSuccessMessage(`OTP sent to ${emailOrPhone}`);
-        setStep("otp");
-      }, 1500);
-    } catch (error) {
-      setIsLoading(false);
-      setErrors({ submit: "Failed to send OTP. Please try again." });
+    const e: Record<string, string> = {};
+    if (!emailOrPhone.trim()) {
+      e.emailOrPhone = "Email or mobile is required";
+    } else if (
+      emailOrPhone.includes("@") &&
+      !/\S+@\S+\.\S+/.test(emailOrPhone)
+    ) {
+      e.emailOrPhone = "Enter a valid email address";
     }
+    setErrors(e);
+    if (Object.keys(e).length > 0) return;
+
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      setStep("otp");
+    }, 1500);
   };
 
   const handleVerifyOTP = async () => {
-    if (!validateOTP()) return;
-
-    setIsLoading(true);
-    try {
-      // TODO: Replace with actual API call to verify OTP
-      setTimeout(() => {
-        setIsLoading(false);
-        setSuccessMessage("OTP verified successfully");
-        setStep("password");
-      }, 1500);
-    } catch (error) {
-      setIsLoading(false);
-      setErrors({ submit: "Invalid OTP. Please try again." });
+    const e: Record<string, string> = {};
+    if (!otp.trim()) {
+      e.otp = "OTP is required";
+    } else if (otp.length !== 6) {
+      e.otp = "OTP must be 6 digits";
     }
+    setErrors(e);
+    if (Object.keys(e).length > 0) return;
+
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      setStep("password");
+    }, 1500);
   };
 
   const handleResetPassword = async () => {
-    if (!validatePassword()) return;
-
-    setIsLoading(true);
-    try {
-      // TODO: Replace with actual API call to reset password
-      setTimeout(() => {
-        setIsLoading(false);
-        setSuccessMessage("Password reset successfully!");
-        setTimeout(() => {
-          router.push("/login");
-        }, 1500);
-      }, 1500);
-    } catch (error) {
-      setIsLoading(false);
-      setErrors({ submit: "Failed to reset password. Please try again." });
+    const e: Record<string, string> = {};
+    if (!newPassword.trim()) {
+      e.newPassword = "Password is required";
+    } else if (newPassword.length < 6) {
+      e.newPassword = "Minimum 6 characters";
     }
+    if (!confirmPassword.trim()) {
+      e.confirmPassword = "Please confirm password";
+    } else if (confirmPassword !== newPassword) {
+      e.confirmPassword = "Passwords do not match";
+    }
+    setErrors(e);
+    if (Object.keys(e).length > 0) return;
+
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      setStep("success");
+      setTimeout(() => {
+        router.replace("/(auth)");
+      }, 2000);
+    }, 1500);
   };
 
   const handleBack = () => {
@@ -136,270 +331,364 @@ export default function ForgotPasswordScreen() {
       setStep("email");
       setOtp("");
       setErrors({});
-      setSuccessMessage("");
-    } else {
+    } else if (step === "password") {
       setStep("otp");
       setNewPassword("");
       setConfirmPassword("");
       setErrors({});
-      setSuccessMessage("");
+    }
+  };
+
+  const getHeadline = () => {
+    switch (step) {
+      case "email":
+        return "Forgot\npassword?";
+      case "otp":
+        return "Verify\nyour identity.";
+      case "password":
+        return "Create new\npassword.";
+      case "success":
+        return "Password\nreset!";
+    }
+  };
+
+  const getSubtext = () => {
+    switch (step) {
+      case "email":
+        return "Enter your email or mobile to receive a verification code.";
+      case "otp":
+        return `We sent a 6-digit code to ${emailOrPhone}. Enter it below.`;
+      case "password":
+        return "Choose a strong password to secure your account.";
+      case "success":
+        return "Your password has been reset successfully. Redirecting to login...";
     }
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      className="flex-1"
-    >
-      <ScrollView
-        contentContainerStyle={{ flexGrow: 1 }}
-        className="bg-white"
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View className="flex-1 justify-center px-6 py-10">
-          {/* Back Button */}
-          <TouchableOpacity onPress={handleBack} className="mb-6">
-            <Text className="text-blue-600 font-semibold text-base">
-              ← Back
-            </Text>
-          </TouchableOpacity>
+    <View style={{ flex: 1, backgroundColor: C.background }}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      <View style={{ flex: 1, paddingTop: Platform.OS === "android" ? StatusBar.currentHeight || 0 : 0 }}>
+        <Decorations />
 
-          {/* Title */}
-          <View className="items-center mb-8">
-            <Text className="text-3xl font-bold text-blue-600 mb-2">
-              Reset Password
-            </Text>
-            <Text className="text-sm text-gray-500">
-              {step === "email" && "Enter your email or phone number"}
-              {step === "otp" && "Enter the OTP sent to your account"}
-              {step === "password" && "Create a new password"}
-            </Text>
-          </View>
-
-          {/* Error Message */}
-          {errors.submit && (
-            <View className="bg-red-100 border border-red-400 rounded-lg p-3 mb-4">
-              <Text className="text-red-700 text-sm">{errors.submit}</Text>
-            </View>
-          )}
-
-          {/* Success Message */}
-          {successMessage && (
-            <View className="bg-green-100 border border-green-400 rounded-lg p-3 mb-4">
-              <Text className="text-green-700 text-sm">{successMessage}</Text>
-            </View>
-          )}
-
-          {/* STEP 1: Email/Phone */}
-          {step === "email" && (
-            <>
-              <View className="mb-6">
-                <Text className="text-gray-700 font-semibold mb-2">
-                  Email or Phone Number
-                </Text>
-                <TextInput
-                  className={`border-2 rounded-lg px-4 py-3 text-base font-medium ${
-                    errors.emailOrPhone
-                      ? "border-red-500 bg-red-50"
-                      : "border-gray-300 bg-gray-50"
-                  }`}
-                  placeholder="Enter email or phone number"
-                  placeholderTextColor="#9CA3AF"
-                  value={emailOrPhone}
-                  onChangeText={(text) => {
-                    setEmailOrPhone(text);
-                    if (errors.emailOrPhone) {
-                      setErrors({ ...errors, emailOrPhone: "" });
-                    }
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: 48 }}
+          >
+            {/* HEADER */}
+            <View style={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: 24, zIndex: 5 }}>
+              {/* Back button */}
+              {step !== "success" && (
+                <TouchableOpacity
+                  onPress={handleBack}
+                  activeOpacity={0.7}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    backgroundColor: "rgba(255,255,255,0.08)",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    marginBottom: 24,
+                    alignSelf: "flex-start",
                   }}
-                  editable={!isLoading}
-                />
-                {errors.emailOrPhone && (
-                  <Text className="text-red-600 text-sm mt-2">
-                    {errors.emailOrPhone}
-                  </Text>
-                )}
+                >
+                  <ArrowLeft size={18} color="rgba(255,255,255,0.60)" />
+                </TouchableOpacity>
+              )}
+
+              {/* Logo */}
+              <View style={{ marginBottom: 32 }}>
+                <BrandLogo />
               </View>
 
-              <TouchableOpacity
-                onPress={handleSendOTP}
-                disabled={isLoading}
-                className={`py-4 rounded-lg items-center justify-center ${
-                  isLoading ? "bg-blue-400" : "bg-blue-600"
-                }`}
+              {/* Headline */}
+              <Text
+                style={{
+                  color: "#fff",
+                  fontSize: 40,
+                  lineHeight: 44,
+                  fontWeight: "700",
+                  fontFamily: titleFont,
+                  marginBottom: 10,
+                  maxWidth: 260,
+                }}
               >
-                {isLoading ? (
-                  <ActivityIndicator size="small" color="white" />
-                ) : (
-                  <Text className="text-white text-lg font-bold">Send OTP</Text>
-                )}
-              </TouchableOpacity>
-            </>
-          )}
-
-          {/* STEP 2: OTP Verification */}
-          {step === "otp" && (
-            <>
-              <View className="mb-6">
-                <Text className="text-gray-700 font-semibold mb-2">
-                  Enter OTP
-                </Text>
-                <TextInput
-                  className={`border-2 rounded-lg px-4 py-3 text-base font-medium text-center tracking-widest ${
-                    errors.otp
-                      ? "border-red-500 bg-red-50"
-                      : "border-gray-300 bg-gray-50"
-                  }`}
-                  placeholder="000000"
-                  placeholderTextColor="#9CA3AF"
-                  value={otp}
-                  onChangeText={(text) => {
-                    setOtp(text.replace(/[^0-9]/g, "").slice(0, 6));
-                    if (errors.otp) {
-                      setErrors({ ...errors, otp: "" });
-                    }
-                  }}
-                  keyboardType="numeric"
-                  maxLength={6}
-                  editable={!isLoading}
-                />
-                {errors.otp && (
-                  <Text className="text-red-600 text-sm mt-2">
-                    {errors.otp}
-                  </Text>
-                )}
-              </View>
-
-              <Text className="text-gray-600 text-sm text-center mb-6">
-                Didn't receive OTP?{" "}
-                <Text className="text-blue-600 font-semibold">Resend</Text>
+                {getHeadline()}
               </Text>
+              <Text style={{ color: C.white40, fontSize: 15, lineHeight: 21 }}>
+                {getSubtext()}
+              </Text>
+            </View>
 
-              <TouchableOpacity
-                onPress={handleVerifyOTP}
-                disabled={isLoading}
-                className={`py-4 rounded-lg items-center justify-center ${
-                  isLoading ? "bg-blue-400" : "bg-blue-600"
-                }`}
+            {/* FORM CARD */}
+            <View style={{ paddingHorizontal: 16, zIndex: 5 }}>
+              <View
+                style={{
+                  backgroundColor: "#fff",
+                  borderRadius: 28,
+                  padding: 22,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 16 },
+                  shadowOpacity: 0.28,
+                  shadowRadius: 28,
+                  elevation: 18,
+                  marginBottom: 16,
+                }}
               >
-                {isLoading ? (
-                  <ActivityIndicator size="small" color="white" />
-                ) : (
-                  <Text className="text-white text-lg font-bold">
-                    Verify OTP
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </>
-          )}
-
-          {/* STEP 3: New Password */}
-          {step === "password" && (
-            <>
-              {/* New Password */}
-              <View className="mb-6">
-                <Text className="text-gray-700 font-semibold mb-2">
-                  New Password
-                </Text>
-                <View
-                  className={`flex-row items-center border-2 rounded-lg px-4 py-3 ${
-                    errors.newPassword
-                      ? "border-red-500 bg-red-50"
-                      : "border-gray-300 bg-gray-50"
-                  }`}
-                >
-                  <TextInput
-                    className="flex-1 text-base font-medium"
-                    placeholder="Enter new password"
-                    placeholderTextColor="#9CA3AF"
-                    value={newPassword}
-                    onChangeText={(text) => {
-                      setNewPassword(text);
-                      if (errors.newPassword) {
-                        setErrors({ ...errors, newPassword: "" });
-                      }
-                    }}
-                    secureTextEntry={!showPassword}
-                    editable={!isLoading}
-                  />
-                  <TouchableOpacity
-                    onPress={() => setShowPassword(!showPassword)}
-                    disabled={isLoading}
+                {/* STEP 1: Email/Phone */}
+                {step === "email" && (
+                  <Animated.View
+                    entering={FadeInDown.duration(300).springify()}
+                    layout={LinearTransition.duration(300)}
                   >
-                    <Text className="text-blue-600 font-semibold text-sm">
-                      {showPassword ? "Hide" : "Show"}
+                    <InputField
+                      label="Email / Mobile"
+                      value={emailOrPhone}
+                      onChangeText={(text) => {
+                        setEmailOrPhone(text);
+                        if (errors.emailOrPhone) setErrors({});
+                      }}
+                      placeholder="you@email.com"
+                      icon={<Mail size={16} color={focused === "email" ? C.accent : C.textMuted} />}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      error={errors.emailOrPhone}
+                      {...f("email")}
+                    />
+
+                    <TouchableOpacity
+                      onPress={handleSendOTP}
+                      activeOpacity={0.85}
+                      disabled={loading}
+                      style={{
+                        backgroundColor: emailOrPhone.trim() ? C.background : "rgba(13,27,42,0.30)",
+                        borderRadius: 16,
+                        paddingVertical: 16,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 8,
+                        marginTop: 8,
+                      }}
+                    >
+                      <Text style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}>
+                        {loading ? "Sending code..." : "Send verification code"}
+                      </Text>
+                      {!loading && <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700" }}>›</Text>}
+                    </TouchableOpacity>
+                  </Animated.View>
+                )}
+
+                {/* STEP 2: OTP */}
+                {step === "otp" && (
+                  <Animated.View
+                    entering={FadeInDown.duration(300).springify()}
+                    layout={LinearTransition.duration(300)}
+                  >
+                    <InputField
+                      label="Enter OTP"
+                      value={otp}
+                      onChangeText={(text) => {
+                        setOtp(text.replace(/[^0-9]/g, ""));
+                        if (errors.otp) setErrors({});
+                      }}
+                      placeholder="000000"
+                      icon={<Mail size={16} color={focused === "otp" ? C.accent : C.textMuted} />}
+                      keyboardType="numeric"
+                      autoCapitalize="none"
+                      maxLength={6}
+                      error={errors.otp}
+                      {...f("otp")}
+                    />
+
+                    <TouchableOpacity activeOpacity={0.7} style={{ marginBottom: 20 }}>
+                      <Text
+                        style={{
+                          color: C.accent,
+                          fontSize: 13,
+                          fontWeight: "600",
+                          textAlign: "center",
+                        }}
+                      >
+                        Did not receive? Resend code
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={handleVerifyOTP}
+                      activeOpacity={0.85}
+                      disabled={loading}
+                      style={{
+                        backgroundColor: otp.length === 6 ? C.background : "rgba(13,27,42,0.30)",
+                        borderRadius: 16,
+                        paddingVertical: 16,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 8,
+                      }}
+                    >
+                      <Text style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}>
+                        {loading ? "Verifying..." : "Verify code"}
+                      </Text>
+                      {!loading && <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700" }}>›</Text>}
+                    </TouchableOpacity>
+                  </Animated.View>
+                )}
+
+                {/* STEP 3: New Password */}
+                {step === "password" && (
+                  <Animated.View
+                    entering={FadeInDown.duration(300).springify()}
+                    layout={LinearTransition.duration(300)}
+                  >
+                    <InputField
+                      label="New Password"
+                      value={newPassword}
+                      onChangeText={(text) => {
+                        setNewPassword(text);
+                        if (errors.newPassword) setErrors({});
+                      }}
+                      placeholder="••••••••"
+                      icon={<Mail size={16} color={focused === "newPassword" ? C.accent : C.textMuted} />}
+                      secureTextEntry={!showPassword}
+                      error={errors.newPassword}
+                      rightElement={
+                        <TouchableOpacity
+                          onPress={() => setShowPassword(!showPassword)}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          {showPassword ? (
+                            <EyeOff size={18} color="#94a3b8" />
+                          ) : (
+                            <Eye size={18} color="#94a3b8" />
+                          )}
+                        </TouchableOpacity>
+                      }
+                      {...f("newPassword")}
+                    />
+
+                    <InputField
+                      label="Confirm Password"
+                      value={confirmPassword}
+                      onChangeText={(text) => {
+                        setConfirmPassword(text);
+                        if (errors.confirmPassword) setErrors({});
+                      }}
+                      placeholder="••••••••"
+                      icon={<Mail size={16} color={focused === "confirmPassword" ? C.accent : C.textMuted} />}
+                      secureTextEntry={!showConfirmPassword}
+                      error={errors.confirmPassword}
+                      rightElement={
+                        <TouchableOpacity
+                          onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          {showConfirmPassword ? (
+                            <EyeOff size={18} color="#94a3b8" />
+                          ) : (
+                            <Eye size={18} color="#94a3b8" />
+                          )}
+                        </TouchableOpacity>
+                      }
+                      {...f("confirmPassword")}
+                    />
+
+                    <TouchableOpacity
+                      onPress={handleResetPassword}
+                      activeOpacity={0.85}
+                      disabled={loading}
+                      style={{
+                        backgroundColor:
+                          newPassword.length >= 6 && confirmPassword === newPassword
+                            ? C.background
+                            : "rgba(13,27,42,0.30)",
+                        borderRadius: 16,
+                        paddingVertical: 16,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 8,
+                        marginTop: 8,
+                      }}
+                    >
+                      <Text style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}>
+                        {loading ? "Resetting password..." : "Reset password"}
+                      </Text>
+                      {!loading && <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700" }}>›</Text>}
+                    </TouchableOpacity>
+                  </Animated.View>
+                )}
+
+                {/* STEP 4: Success */}
+                {step === "success" && (
+                  <Animated.View
+                    entering={FadeIn.duration(400)}
+                    style={{ alignItems: "center", paddingVertical: 32 }}
+                  >
+                    <View
+                      style={{
+                        width: 80,
+                        height: 80,
+                        borderRadius: 40,
+                        backgroundColor: "rgba(34,197,94,0.15)",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        marginBottom: 24,
+                      }}
+                    >
+                      <CheckCircle size={48} color={C.success} />
+                    </View>
+                    <Text
+                      style={{
+                        fontSize: 24,
+                        fontWeight: "700",
+                        color: C.textPrimary,
+                        marginBottom: 8,
+                        textAlign: "center",
+                      }}
+                    >
+                      Password Reset!
                     </Text>
-                  </TouchableOpacity>
-                </View>
-                {errors.newPassword && (
-                  <Text className="text-red-600 text-sm mt-2">
-                    {errors.newPassword}
-                  </Text>
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        color: C.textMuted,
+                        textAlign: "center",
+                        lineHeight: 20,
+                      }}
+                    >
+                      Your password has been reset successfully.{"\n"}Redirecting to login...
+                    </Text>
+                  </Animated.View>
                 )}
               </View>
 
-              {/* Confirm Password */}
-              <View className="mb-8">
-                <Text className="text-gray-700 font-semibold mb-2">
-                  Confirm Password
-                </Text>
-                <View
-                  className={`flex-row items-center border-2 rounded-lg px-4 py-3 ${
-                    errors.confirmPassword
-                      ? "border-red-500 bg-red-50"
-                      : "border-gray-300 bg-gray-50"
-                  }`}
-                >
-                  <TextInput
-                    className="flex-1 text-base font-medium"
-                    placeholder="Confirm your password"
-                    placeholderTextColor="#9CA3AF"
-                    value={confirmPassword}
-                    onChangeText={(text) => {
-                      setConfirmPassword(text);
-                      if (errors.confirmPassword) {
-                        setErrors({ ...errors, confirmPassword: "" });
-                      }
-                    }}
-                    secureTextEntry={!showConfirmPassword}
-                    editable={!isLoading}
-                  />
-                  <TouchableOpacity
-                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                    disabled={isLoading}
-                  >
-                    <Text className="text-blue-600 font-semibold text-sm">
-                      {showConfirmPassword ? "Hide" : "Show"}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                {errors.confirmPassword && (
-                  <Text className="text-red-600 text-sm mt-2">
-                    {errors.confirmPassword}
-                  </Text>
-                )}
-              </View>
-
-              <TouchableOpacity
-                onPress={handleResetPassword}
-                disabled={isLoading}
-                className={`py-4 rounded-lg items-center justify-center ${
-                  isLoading ? "bg-blue-400" : "bg-blue-600"
-                }`}
+              {/* Legal */}
+              <Text
+                style={{
+                  textAlign: "center",
+                  fontSize: 10,
+                  color: "rgba(255,255,255,0.18)",
+                  lineHeight: 16,
+                  paddingHorizontal: 12,
+                }}
               >
-                {isLoading ? (
-                  <ActivityIndicator size="small" color="white" />
-                ) : (
-                  <Text className="text-white text-lg font-bold">
-                    Reset Password
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+                SEBI Reg. No. MF/021/05 · Investments subject to market risks.
+                Please read all scheme documents carefully.
+              </Text>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </View>
+    </View>
   );
 }

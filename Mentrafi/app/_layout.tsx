@@ -6,23 +6,35 @@ import "../global.css";
 
 export default function RootLayout() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
+  const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null);
   const router = useRouter();
 
   useEffect(() => {
-    AsyncStorage.getItem("userToken").then((token) => {
+    // Check both auth status and onboarding status
+    Promise.all([
+      AsyncStorage.getItem("userToken"),
+      AsyncStorage.getItem("hasSeenOnboarding"),
+    ]).then(([token, onboarding]) => {
       setIsLoggedIn(!!token);
+      setHasSeenOnboarding(!!onboarding);
     });
   }, []);
 
   useEffect(() => {
-    if (isLoggedIn === null) return;
+    // Wait for both checks to complete
+    if (isLoggedIn === null || hasSeenOnboarding === null) return;
 
     if (isLoggedIn) {
+      // User is logged in → go to home
       router.replace("/(tabs)/home");
+    } else if (!hasSeenOnboarding) {
+      // User not logged in AND hasn't seen onboarding → show onboarding
+      router.replace("/onboarding" as any);
     } else {
-      router.replace("/(tabs)/");
+      // User not logged in BUT has seen onboarding → go to auth
+      router.replace("/(auth)" as any);
     }
-  }, [isLoggedIn]);
+  }, [isLoggedIn, hasSeenOnboarding, router]);
 
   return (
     <ThemeProvider>

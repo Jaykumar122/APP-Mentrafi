@@ -1,0 +1,879 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { router } from "expo-router";
+import { Eye, EyeOff, TrendingUp } from "lucide-react-native";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StatusBar,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+  FadeOut,
+  FadeOutDown,
+  FadeOutUp,
+  Layout,
+  LinearTransition,
+  SlideInLeft,
+  SlideInRight,
+  SlideOutLeft,
+  SlideOutRight,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
+import Svg, { Path } from "react-native-svg";
+import { API_URL } from "../../utils/api";
+
+const C = {
+  background: "#0d1b2a",
+  accent: "#b8943a",
+  accentGlow: "rgba(184,148,58,0.15)",
+  surface: "#f5f6f8",
+  bodyBg: "#f0f1f3",
+  textPrimary: "#0d1b2a",
+  textMuted: "#6b7280",
+  border: "rgba(13,27,42,0.1)",
+  white40: "rgba(255,255,255,0.40)",
+  white55: "rgba(255,255,255,0.55)",
+  white18: "rgba(255,255,255,0.18)",
+  error: "#dc2626",
+  errorBg: "#fee2e2",
+};
+
+const titleFont = Platform.select({ ios: "Georgia", android: "serif", default: undefined });
+
+const timingConfig = {
+  duration: 300,
+  easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+};
+
+const springConfig = {
+  damping: 20,
+  stiffness: 120,
+  mass: 0.5,
+};
+
+function GoogleIcon() {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 24 24">
+      <Path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+      />
+      <Path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+      />
+      <Path
+        fill="#FBBC05"
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+      />
+      <Path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+      />
+    </Svg>
+  );
+}
+
+function AppleIcon() {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 24 24" fill={C.textPrimary}>
+      <Path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
+    </Svg>
+  );
+}
+
+function BrandLogo() {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+      <View
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: 14,
+          borderWidth: 1.5,
+          borderColor: C.accent,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "rgba(184,148,58,0.08)",
+        }}
+      >
+        <View
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: 4,
+            borderWidth: 1.5,
+            borderColor: C.accent,
+          }}
+        />
+      </View>
+      <Text
+        style={{
+          color: "#fff",
+          fontSize: 18,
+          fontWeight: "600",
+          fontFamily: titleFont,
+        }}
+      >
+        Mentrafi
+      </Text>
+    </View>
+  );
+}
+
+function Decorations() {
+  return (
+    <>
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: -72,
+          right: -72,
+          width: 280,
+          height: 280,
+          borderRadius: 140,
+          backgroundColor: C.accentGlow,
+        }}
+      />
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: -20,
+          right: -22,
+          width: 174,
+          height: 174,
+          borderRadius: 87,
+          backgroundColor: C.accent,
+          opacity: 0.96,
+        }}
+      />
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: 82,
+          right: 18,
+          zIndex: 5,
+          backgroundColor: "rgba(255,255,255,0.18)",
+          borderRadius: 16,
+          paddingHorizontal: 12,
+          paddingVertical: 9,
+          borderWidth: 1,
+          borderColor: "rgba(255,255,255,0.24)",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 8,
+        }}
+      >
+        <View
+          style={{
+            width: 24,
+            height: 24,
+            borderRadius: 12,
+            backgroundColor: "rgba(255,255,255,0.20)",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <TrendingUp size={12} color="#fff" />
+        </View>
+        <View>
+          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>
+            +26.2%
+          </Text>
+          <Text style={{ color: "rgba(255,255,255,0.68)", fontSize: 9 }}>
+            1Y Return
+          </Text>
+        </View>
+      </View>
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: 214,
+          right: -72,
+          width: 188,
+          height: 188,
+          borderRadius: 94,
+          backgroundColor: "rgba(255,255,255,0.03)",
+          borderWidth: 1,
+          borderColor: "rgba(255,255,255,0.07)",
+        }}
+      />
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: 156,
+          left: 46,
+          width: 12,
+          height: 12,
+          borderRadius: 6,
+          backgroundColor: C.accent,
+          opacity: 0.9,
+        }}
+      />
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          bottom: 220,
+          left: -52,
+          width: 164,
+          height: 164,
+          borderRadius: 82,
+          borderWidth: 1,
+          borderColor: "rgba(184,148,58,0.09)",
+          backgroundColor: "rgba(184,148,58,0.02)",
+        }}
+      />
+    </>
+  );
+}
+
+type FieldProps = {
+  label: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  placeholder: string;
+  secureTextEntry?: boolean;
+  keyboardType?: "default" | "email-address";
+  autoCapitalize?: "none" | "words" | "sentences";
+  rightElement?: ReactNode;
+  error?: string;
+};
+
+function Field({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  secureTextEntry = false,
+  keyboardType = "default",
+  autoCapitalize = "sentences",
+  rightElement,
+  error,
+}: FieldProps) {
+  return (
+    <Animated.View layout={LinearTransition} style={{ marginBottom: 18 }}>
+      <Text
+        style={{
+          fontSize: 12,
+          fontWeight: "600",
+          color: C.textMuted,
+          marginBottom: 8,
+        }}
+      >
+        {label}
+      </Text>
+      <View
+        style={{
+          minHeight: 44,
+          borderRadius: 16,
+          borderWidth: 1,
+          borderColor: error ? C.error : C.border,
+          backgroundColor: C.bodyBg,
+          paddingHorizontal: 16,
+          flexDirection: "row",
+          alignItems: "center",
+        }}
+      >
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor="#8b94a3"
+          secureTextEntry={secureTextEntry}
+          keyboardType={keyboardType}
+          autoCapitalize={autoCapitalize}
+          style={{
+            flex: 1,
+            paddingVertical: Platform.OS === "ios" ? 15 : 12,
+            fontSize: 14,
+            color: C.textPrimary,
+          }}
+        />
+        {rightElement}
+      </View>
+      {error ? (
+        <Text style={{ color: C.error, fontSize: 11, marginTop: 5, marginLeft: 2 }}>
+          {error}
+        </Text>
+      ) : null}
+    </Animated.View>
+  );
+}
+
+export default function AuthScreen() {
+  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [fullName, setFullName] = useState("");
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const tabIndicatorX = useSharedValue(0);
+  const [tabWidth, setTabWidth] = useState(0);
+
+  useEffect(() => {
+    if (tabWidth > 0) {
+      tabIndicatorX.value = withSpring(mode === "login" ? 0 : tabWidth, springConfig);
+    }
+  }, [mode, tabWidth, tabIndicatorX]);
+
+  const tabIndicatorStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: tabIndicatorX.value }],
+  }));
+
+  const isValid = useMemo(() => {
+    if (mode === "signup") {
+      return (
+        fullName.trim().length > 0 &&
+        identifier.trim().length > 0 &&
+        password.length >= 6 &&
+        confirmPassword === password
+      );
+    }
+    return identifier.trim().length > 0 && password.length >= 6;
+  }, [mode, fullName, identifier, password, confirmPassword]);
+
+  const validate = () => {
+    const nextErrors: Record<string, string> = {};
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const phoneRegex = /^[0-9]{10,}$/;
+
+    if (mode === "signup" && !fullName.trim()) {
+      nextErrors.fullName = "Full name is required";
+    }
+
+    if (!identifier.trim()) {
+      nextErrors.identifier = "Mobile or email is required";
+    } else if (
+      !emailRegex.test(identifier.trim()) &&
+      !phoneRegex.test(identifier.trim())
+    ) {
+      nextErrors.identifier = "Enter a valid mobile number or email";
+    }
+
+    if (!password.trim()) {
+      nextErrors.password = "Password is required";
+    } else if (password.length < 6) {
+      nextErrors.password = "Password must be at least 6 characters";
+    }
+
+    if (mode === "signup") {
+      if (!confirmPassword.trim()) {
+        nextErrors.confirmPassword = "Please confirm your password";
+      } else if (confirmPassword !== password) {
+        nextErrors.confirmPassword = "Passwords do not match";
+      }
+    }
+
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const handleSubmit = async () => {
+    if (!validate()) return;
+
+    setLoading(true);
+    try {
+      if (mode === "signup") {
+        const signupRes = await fetch(`${API_URL}/api/auth/signup`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: fullName.trim(),
+            email: identifier.trim(),
+            password,
+          }),
+        });
+
+        const signupData = await signupRes.json();
+
+        if (!signupRes.ok) {
+          setErrors({ form: signupData.error || "Signup failed" });
+          setLoading(false);
+          return;
+        }
+      }
+
+      const signinRes = await fetch(`${API_URL}/api/auth/signin`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: identifier.trim(),
+          password,
+        }),
+      });
+
+      const signinData = await signinRes.json();
+
+      if (!signinRes.ok) {
+        setErrors({ form: signinData.error || "Sign in failed" });
+        setLoading(false);
+        return;
+      }
+
+      await AsyncStorage.setItem("userToken", signinData.token);
+      if (signinData.user?.name) {
+        await AsyncStorage.setItem("userName", signinData.user.name);
+      }
+      router.replace("/(tabs)/home");
+    } catch {
+      setErrors({ form: "Network error. Check your connection." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const switchMode = (newMode: "login" | "signup") => {
+    if (newMode === mode) return;
+    setMode(newMode);
+    setErrors({});
+  };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: C.background }}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      <View style={{ flex: 1, paddingTop: Platform.OS === "android" ? StatusBar.currentHeight || 0 : 0 }}>
+        <Decorations />
+
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: 34 }}
+          >
+            <View style={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 26 }}>
+              <View style={{ marginBottom: 36 }}>
+                <BrandLogo />
+              </View>
+
+              <Animated.View key={mode} entering={FadeIn.duration(320)} exiting={FadeOut.duration(220)}>
+                <Text
+                  style={{
+                    color: "#fff",
+                    fontSize: 40,
+                    lineHeight: 44,
+                    fontWeight: "700",
+                    fontFamily: titleFont,
+                    marginBottom: 10,
+                    maxWidth: 260,
+                  }}
+                >
+                  {mode === "login" ? "Welcome\nback." : "Create your\naccount."}
+                </Text>
+
+                <Text style={{ color: C.white40, fontSize: 15, lineHeight: 21 }}>
+                  {mode === "login"
+                    ? "Sign in to access your portfolio."
+                    : "Start investing in under 3 minutes."}
+                </Text>
+              </Animated.View>
+            </View>
+
+            <View style={{ paddingHorizontal: 16 }}>
+              <View
+                style={{
+                  backgroundColor: C.surface,
+                  borderRadius: 30,
+                  padding: 20,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 16 },
+                  shadowOpacity: 0.22,
+                  shadowRadius: 24,
+                  elevation: 14,
+                }}
+              >
+                <View
+                  onLayout={(e) => {
+                    const { width } = e.nativeEvent.layout;
+                    const calculatedWidth = (width - 8) / 2;
+                    setTabWidth(calculatedWidth);
+                  }}
+                  style={{
+                    flexDirection: "row",
+                    backgroundColor: "#eaedf1",
+                    borderRadius: 16,
+                    padding: 4,
+                    marginBottom: 24,
+                    position: "relative",
+                  }}
+                >
+                  <Animated.View
+                    style={[
+                      {
+                        position: "absolute",
+                        top: 4,
+                        left: 4,
+                        width: tabWidth,
+                        height: "100%",
+                        marginVertical: 4,
+                        backgroundColor: C.background,
+                        borderRadius: 12,
+                        shadowColor: "#000",
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.15,
+                        shadowRadius: 4,
+                        elevation: 3,
+                      },
+                      tabIndicatorStyle,
+                    ]}
+                  />
+
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() => switchMode("login")}
+                    style={{
+                      flex: 1,
+                      borderRadius: 12,
+                      paddingVertical: 11,
+                      alignItems: "center",
+                      zIndex: 1,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: mode === "login" ? "#fff" : C.textMuted,
+                        fontWeight: "700",
+                        fontSize: 14,
+                      }}
+                    >
+                      Log In
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() => switchMode("signup")}
+                    style={{
+                      flex: 1,
+                      borderRadius: 12,
+                      paddingVertical: 11,
+                      alignItems: "center",
+                      zIndex: 1,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: mode === "signup" ? "#fff" : C.textMuted,
+                        fontWeight: "700",
+                        fontSize: 14,
+                      }}
+                    >
+                      Sign Up
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {errors.form ? (
+                  <Animated.View
+                    entering={FadeIn.duration(200)}
+                    exiting={FadeOut.duration(150)}
+                    style={{
+                      backgroundColor: C.errorBg,
+                      borderRadius: 12,
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                      marginBottom: 16,
+                    }}
+                  >
+                    <Text style={{ color: C.error, fontSize: 13 }}>{errors.form}</Text>
+                  </Animated.View>
+                ) : null}
+
+                {/* Full Name - Sign Up Only */}
+                {mode === "signup" && (
+                  <Animated.View
+                    entering={FadeInDown.duration(300).springify().damping(15)}
+                    exiting={FadeOutUp.duration(200)}
+                    layout={LinearTransition.duration(300)}
+                  >
+                    <Field
+                      label="Full Name"
+                      value={fullName}
+                      onChangeText={(text) => {
+                        setFullName(text);
+                        if (errors.fullName || errors.form) {
+                          setErrors((prev) => ({ ...prev, fullName: "", form: "" }));
+                        }
+                      }}
+                      placeholder="Singh"
+                      autoCapitalize="words"
+                      error={errors.fullName}
+                    />
+                  </Animated.View>
+                )}
+
+                {/* Mobile / Email - Both modes */}
+                <Animated.View
+                  key={`identifier-${mode}`}
+                  entering={mode === "login" ? SlideInRight.duration(300).springify() : FadeIn.duration(250)}
+                  layout={LinearTransition.duration(300)}
+                >
+                  <Field
+                    label="Mobile / Email"
+                    value={identifier}
+                    onChangeText={(text) => {
+                      setIdentifier(text);
+                      if (errors.identifier || errors.form) {
+                        setErrors((prev) => ({ ...prev, identifier: "", form: "" }));
+                      }
+                    }}
+                    placeholder="+91 or you@email.com"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    error={errors.identifier}
+                  />
+                </Animated.View>
+
+                {/* Password - Both modes */}
+                <Animated.View
+                  key={`password-${mode}`}
+                  entering={mode === "login" ? SlideInRight.duration(300).delay(50).springify() : FadeIn.duration(250).delay(50)}
+                  layout={LinearTransition.duration(300)}
+                >
+                  <Field
+                    label="Password"
+                    value={password}
+                    onChangeText={(text) => {
+                      setPassword(text);
+                      if (errors.password || errors.form) {
+                        setErrors((prev) => ({ ...prev, password: "", form: "" }));
+                      }
+                    }}
+                    placeholder="••••••••"
+                    secureTextEntry={!showPassword}
+                    error={errors.password}
+                    rightElement={
+                      <TouchableOpacity
+                        onPress={() => setShowPassword((prev) => !prev)}
+                        activeOpacity={0.7}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        {showPassword ? (
+                          <EyeOff size={18} color="#94a3b8" />
+                        ) : (
+                          <Eye size={18} color="#94a3b8" />
+                        )}
+                      </TouchableOpacity>
+                    }
+                  />
+                </Animated.View>
+
+                {/* Confirm Password - Sign Up Only */}
+                {mode === "signup" && (
+                  <Animated.View
+                    entering={FadeInDown.duration(300).delay(100).springify().damping(15)}
+                    exiting={FadeOutUp.duration(200)}
+                    layout={LinearTransition.duration(300)}
+                  >
+                    <Field
+                      label="Confirm Password"
+                      value={confirmPassword}
+                      onChangeText={(text) => {
+                        setConfirmPassword(text);
+                        if (errors.confirmPassword || errors.form) {
+                          setErrors((prev) => ({
+                            ...prev,
+                            confirmPassword: "",
+                            form: "",
+                          }));
+                        }
+                      }}
+                      placeholder="••••••••"
+                      secureTextEntry={!showConfirmPassword}
+                      error={errors.confirmPassword}
+                      rightElement={
+                        <TouchableOpacity
+                          onPress={() => setShowConfirmPassword((prev) => !prev)}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          {showConfirmPassword ? (
+                            <EyeOff size={18} color="#94a3b8" />
+                          ) : (
+                            <Eye size={18} color="#94a3b8" />
+                          )}
+                        </TouchableOpacity>
+                      }
+                    />
+                  </Animated.View>
+                )}
+
+                {/* Forgot Password - Login Only */}
+                {mode === "login" && (
+                  <Animated.View
+                    entering={FadeIn.duration(300).delay(150)}
+                    exiting={FadeOut.duration(200)}
+                    layout={LinearTransition.duration(300)}
+                  >
+                    <TouchableOpacity
+                      onPress={() => router.push("/(auth)/forgot-password")}
+                      activeOpacity={0.7}
+                      style={{ alignSelf: "flex-end", marginTop: -2, marginBottom: 20 }}
+                    >
+                      <Text style={{ color: C.accent, fontSize: 13, fontWeight: "600" }}>
+                        Forgot password?
+                      </Text>
+                    </TouchableOpacity>
+                  </Animated.View>
+                )}
+
+                {/* Submit Button */}
+                <Animated.View
+                  key={`submit-${mode}`}
+                  entering={FadeInUp.duration(300).delay(mode === "signup" ? 200 : 100).springify()}
+                  layout={LinearTransition.duration(300)}
+                >
+                  <TouchableOpacity
+                    onPress={handleSubmit}
+                    activeOpacity={isValid && !loading ? 0.88 : 1}
+                    disabled={!isValid || loading}
+                    style={{ marginTop: mode === "signup" ? 8 : 0, marginBottom: 20 }}
+                  >
+                    <View
+                      style={{
+                        backgroundColor: isValid ? C.background : "rgba(13,27,42,0.35)",
+                        borderRadius: 16,
+                        paddingVertical: 16,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 8,
+                      }}
+                    >
+                      <Text style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}>
+                        {loading
+                          ? mode === "login"
+                            ? "Signing in..."
+                            : "Creating account..."
+                          : mode === "login"
+                          ? "Sign in securely"
+                          : "Create Account"}
+                      </Text>
+                      {!loading ? (
+                        <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700" }}>›</Text>
+                      ) : null}
+                    </View>
+                  </TouchableOpacity>
+                </Animated.View>
+
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 12,
+                    marginBottom: 20,
+                  }}
+                >
+                  <View style={{ flex: 1, height: 1, backgroundColor: C.border }} />
+                  <Text style={{ color: C.textMuted, fontSize: 12 }}>or continue with</Text>
+                  <View style={{ flex: 1, height: 1, backgroundColor: C.border }} />
+                </View>
+
+                <View style={{ flexDirection: "row", gap: 12 }}>
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    style={{
+                      flex: 1,
+                      minHeight: 44,
+                      borderRadius: 16,
+                      borderWidth: 1,
+                      borderColor: C.border,
+                      backgroundColor: "#fff",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexDirection: "row",
+                      gap: 8,
+                    }}
+                  >
+                    <GoogleIcon />
+                    <Text style={{ color: C.textPrimary, fontSize: 14, fontWeight: "500" }}>
+                      Google
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    style={{
+                      flex: 1,
+                      minHeight: 44,
+                      borderRadius: 16,
+                      borderWidth: 1,
+                      borderColor: C.border,
+                      backgroundColor: "#fff",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexDirection: "row",
+                      gap: 8,
+                    }}
+                  >
+                    <AppleIcon />
+                    <Text style={{ color: C.textPrimary, fontSize: 14, fontWeight: "500" }}>
+                      Apple
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+
+            <Animated.View
+              key={`footer-${mode}`}
+              entering={FadeIn.duration(300).delay(250)}
+              exiting={FadeOut.duration(150)}
+              layout={LinearTransition.duration(300)}
+              style={{ alignItems: "center", marginTop: 18, paddingHorizontal: 24 }}
+            >
+              <TouchableOpacity
+                onPress={() => switchMode(mode === "login" ? "signup" : "login")}
+                activeOpacity={0.7}
+              >
+                <Text style={{ color: C.white55, fontSize: 13 }}>
+                  {mode === "login" ? "New to Mentrafi? " : "Already have an account? "}
+                  <Text style={{ color: C.accent, fontWeight: "700" }}>
+                    {mode === "login" ? "Create account" : "Log in"}
+                  </Text>
+                </Text>
+              </TouchableOpacity>
+
+              <Text
+                style={{
+                  marginTop: 14,
+                  textAlign: "center",
+                  color: C.white18,
+                  fontSize: 10,
+                  lineHeight: 15,
+                }}
+              >
+                SEBI Reg. No. MF/021/05 · Investments subject to market risks. Please read all
+                scheme documents carefully.
+              </Text>
+            </Animated.View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </View>
+    </View>
+  );
+}

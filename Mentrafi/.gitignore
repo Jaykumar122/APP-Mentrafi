@@ -48,7 +48,6 @@ app-example
 
 # vscode
 .vscode/
-readme.md
 git rm --cached README.md
 THEME_IMPLEMENTATION.md
 Mentrafi/utils/api.ts

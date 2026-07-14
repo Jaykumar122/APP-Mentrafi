@@ -164,9 +164,12 @@ export default function ProfileScreen() {
         text: "Logout",
         style: "destructive",
         onPress: async () => {
+          // Clear all user data and onboarding flag
           await AsyncStorage.removeItem("userToken");
           await AsyncStorage.removeItem("userName");
-          router.replace("/(tabs)/");
+          await AsyncStorage.removeItem("hasSeenOnboarding");
+          // Navigate to onboarding
+          router.replace("/onboarding" as any);
         },
       },
     ]);
