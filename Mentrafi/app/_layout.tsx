@@ -3,6 +3,8 @@ import { Stack, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { ThemeProvider } from "../context/ThemeContext";
 import "../global.css";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+
 
 export default function RootLayout() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
@@ -19,6 +21,7 @@ export default function RootLayout() {
       setHasSeenOnboarding(!!onboarding);
     });
   }, []);
+  
 
   useEffect(() => {
     // Wait for both checks to complete
@@ -27,18 +30,17 @@ export default function RootLayout() {
     if (isLoggedIn) {
       // User is logged in → go to home
       router.replace("/(tabs)/home");
-    } else if (!hasSeenOnboarding) {
-      // User not logged in AND hasn't seen onboarding → show onboarding
-      router.replace("/onboarding" as any);
     } else {
-      // User not logged in BUT has seen onboarding → go to auth
+      // User is not logged in → go to auth
       router.replace("/(auth)" as any);
     }
   }, [isLoggedIn, hasSeenOnboarding, router]);
 
   return (
-    <ThemeProvider>
-      <Stack screenOptions={{ headerShown: false }} />
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider>
+        <Stack screenOptions={{ headerShown: false }} />
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }

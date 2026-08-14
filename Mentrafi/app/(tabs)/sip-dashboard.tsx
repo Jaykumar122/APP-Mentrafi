@@ -1,4 +1,3 @@
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import {
   ArrowLeft,
@@ -10,15 +9,34 @@ import {
   TrendingUp,
 } from "lucide-react-native";
 import { useState } from "react";
-import {
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useTheme } from "../../context/ThemeContext";
 
-const activeSIPs = [
+// ---------------------------------------------------------------------------
+// Brand palette — matches home, explore, portfolio, ai-advisor & profile.
+// ---------------------------------------------------------------------------
+const NAVY = "#12131c";
+const NAVY_SOFT = "rgba(255,255,255,0.10)";
+const NAVY_BORDER = "rgba(255,255,255,0.18)";
+const GOLD = "#D4AF37";
+const GOLD_SOFT = "rgba(212,175,55,0.16)";
+const GREEN = "#22c55e";
+const GREEN_SOFT_LIGHT = "#dcfce7";
+const GREEN_SOFT_DARK = "#14532d";
+
+type SIP = {
+  name: string;
+  type: "Equity" | "Debt";
+  completed: number;
+  total: number;
+  monthlyAmount: number;
+  nextDate: string;
+  totalInvested: number;
+  currentValue: number;
+  returns: number;
+};
+
+const activeSIPs: SIP[] = [
   {
     name: "HDFC Balanced Advantage Fund",
     type: "Equity",
@@ -54,7 +72,7 @@ const activeSIPs = [
   },
 ];
 
-const pausedSIPs = [
+const pausedSIPs: SIP[] = [
   {
     name: "Axis Liquid Fund",
     type: "Debt",
@@ -74,7 +92,6 @@ export default function SIPDashboard() {
   const [activeTab, setActiveTab] = useState<"active" | "paused">("active");
 
   const sips = activeTab === "active" ? activeSIPs : pausedSIPs;
-
   const monthlySIP = activeSIPs.reduce((sum, s) => sum + s.monthlyAmount, 0);
   const totalInvested = activeSIPs.reduce((sum, s) => sum + s.totalInvested, 0);
 
@@ -85,183 +102,96 @@ export default function SIPDashboard() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <LinearGradient
-        colors={["#7c3aed", "#d946ef", "#fb923c"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+      {/* Header — navy, matches home/portfolio hero */}
+      <View
+        style={{ backgroundColor: NAVY }}
+        className="px-5 pt-14 pb-6 rounded-b-[32px]"
       >
-        {/* Blob */}
-        <View
-          style={{
-            position: "absolute",
-            top: -40,
-            right: -40,
-            width: 180,
-            height: 180,
-            borderRadius: 90,
-            backgroundColor: "rgba(249,168,212,0.5)",
-          }}
-        />
-
-        {/* Header */}
-        <View
-          style={{
-            paddingHorizontal: 20,
-            paddingTop: 52,
-            paddingBottom: 20,
-          }}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 20,
-            }}
-          >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-              <TouchableOpacity
-                onPress={() => router.back()}
-                style={{
-                  width: 36,
-                  height: 36,
-                  backgroundColor: "rgba(255,255,255,0.2)",
-                  borderRadius: 18,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <ArrowLeft size={18} color="white" />
-              </TouchableOpacity>
-              <Text style={{ color: "white", fontSize: 20, fontWeight: "700" }}>
-                My SIPs
-              </Text>
-            </View>
-
-            <View style={{ flexDirection: "row", gap: 8 }}>
-              <TouchableOpacity
-                onPress={() => router.push("/sip-calculator" as any)}
-                style={{
-                  width: 36,
-                  height: 36,
-                  backgroundColor: "rgba(255,255,255,0.2)",
-                  borderRadius: 18,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Calculator size={18} color="white" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={{
-                  width: 36,
-                  height: 36,
-                  backgroundColor: "rgba(255,255,255,0.2)",
-                  borderRadius: 18,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Plus size={18} color="white" />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Stats Row */}
-          <View style={{ flexDirection: "row", gap: 12, marginBottom: 20 }}>
-            <View
-              style={{
-                flex: 1,
-                backgroundColor: "rgba(255,255,255,0.15)",
-                borderRadius: 16,
-                padding: 14,
-                borderWidth: 1,
-                borderColor: "rgba(255,255,255,0.2)",
-              }}
-            >
-              <Text style={{ color: "rgba(255,255,255,0.8)", fontSize: 12, marginBottom: 4 }}>
-                Monthly SIP
-              </Text>
-              <Text style={{ color: "white", fontSize: 22, fontWeight: "800" }}>
-                {formatINR(monthlySIP)}
-              </Text>
-            </View>
-            <View
-              style={{
-                flex: 1,
-                backgroundColor: "rgba(255,255,255,0.15)",
-                borderRadius: 16,
-                padding: 14,
-                borderWidth: 1,
-                borderColor: "rgba(255,255,255,0.2)",
-              }}
-            >
-              <Text style={{ color: "rgba(255,255,255,0.8)", fontSize: 12, marginBottom: 4 }}>
-                Total Invested
-              </Text>
-              <Text style={{ color: "white", fontSize: 22, fontWeight: "800" }}>
-                {formatINR(totalInvested)}
-              </Text>
-            </View>
-          </View>
-
-          {/* Tabs */}
-          <View
-            style={{
-              flexDirection: "row",
-              backgroundColor: "rgba(255,255,255,0.15)",
-              borderRadius: 30,
-              padding: 4,
-            }}
-          >
+        <View className="flex-row items-center justify-between mb-6">
+          <View className="flex-row items-center gap-3">
             <TouchableOpacity
-              onPress={() => setActiveTab("active")}
-              style={{
-                flex: 1,
-                paddingVertical: 10,
-                borderRadius: 26,
-                alignItems: "center",
-                backgroundColor: activeTab === "active" ? "white" : "transparent",
-              }}
+              onPress={() => router.back()}
+              style={{ backgroundColor: NAVY_SOFT }}
+              className="w-9 h-9 rounded-full items-center justify-center"
             >
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontWeight: "700",
-                  color: activeTab === "active" ? "#7c3aed" : "white",
-                }}
-              >
-                Active ({activeSIPs.length})
-              </Text>
+              <ArrowLeft size={18} color="white" />
+            </TouchableOpacity>
+            <Text className="text-white font-bold text-xl">My SIPs</Text>
+          </View>
+
+          <View className="flex-row gap-2">
+            <TouchableOpacity
+              onPress={() => router.push("/sip-calculator" as any)}
+              style={{ backgroundColor: NAVY_SOFT }}
+              className="w-9 h-9 rounded-full items-center justify-center"
+            >
+              <Calculator size={16} color={GOLD} />
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => setActiveTab("paused")}
-              style={{
-                flex: 1,
-                paddingVertical: 10,
-                borderRadius: 26,
-                alignItems: "center",
-                backgroundColor: activeTab === "paused" ? "white" : "transparent",
-              }}
+              style={{ backgroundColor: NAVY_SOFT }}
+              className="w-9 h-9 rounded-full items-center justify-center"
             >
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontWeight: "700",
-                  color: activeTab === "paused" ? "#7c3aed" : "white",
-                }}
-              >
-                Paused ({pausedSIPs.length})
-              </Text>
+              <Plus size={16} color={GOLD} />
             </TouchableOpacity>
           </View>
         </View>
-      </LinearGradient>
+
+        {/* Stats row */}
+        <View className="flex-row gap-3 mb-5">
+          <View
+            style={{ backgroundColor: NAVY_SOFT, borderColor: NAVY_BORDER }}
+            className="flex-1 rounded-2xl p-4 border"
+          >
+            <Text className="text-white/50 text-xs mb-1">Monthly SIP</Text>
+            <Text className="text-white text-xl font-bold">{formatINR(monthlySIP)}</Text>
+          </View>
+          <View
+            style={{ backgroundColor: NAVY_SOFT, borderColor: NAVY_BORDER }}
+            className="flex-1 rounded-2xl p-4 border"
+          >
+            <Text className="text-white/50 text-xs mb-1">Total Invested</Text>
+            <Text style={{ color: GOLD }} className="text-xl font-bold">
+              {formatINR(totalInvested)}
+            </Text>
+          </View>
+        </View>
+
+        {/* Segmented tabs */}
+        <View
+          style={{ backgroundColor: NAVY_SOFT }}
+          className="flex-row rounded-full p-1"
+        >
+          <TouchableOpacity
+            onPress={() => setActiveTab("active")}
+            style={{ backgroundColor: activeTab === "active" ? GOLD : "transparent" }}
+            className="flex-1 py-2.5 rounded-full items-center"
+          >
+            <Text
+              style={{ color: activeTab === "active" ? NAVY : "white" }}
+              className="text-xs font-bold"
+            >
+              Active ({activeSIPs.length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setActiveTab("paused")}
+            style={{ backgroundColor: activeTab === "paused" ? GOLD : "transparent" }}
+            className="flex-1 py-2.5 rounded-full items-center"
+          >
+            <Text
+              style={{ color: activeTab === "paused" ? NAVY : "white" }}
+              className="text-xs font-bold"
+            >
+              Paused ({pausedSIPs.length})
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
 
       {/* SIP Cards */}
       <ScrollView
-        style={{ flex: 1, backgroundColor: colors.cardBg }}
-        contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 40 }}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: 20, gap: 12, paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
       >
         {sips.map((sip, index) => {
@@ -269,179 +199,101 @@ export default function SIPDashboard() {
           return (
             <View
               key={index}
-              style={{
-                backgroundColor: isDark ? colors.inputBg : "white",
-                borderRadius: 20,
-                padding: 16,
-                borderWidth: 1,
-                borderColor: isDark ? colors.border : "#f3f4f6",
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.06,
-                shadowRadius: 8,
-                elevation: 3,
-              }}
+              style={{ backgroundColor: colors.cardBg, borderColor: colors.border }}
+              className="rounded-2xl border p-4"
             >
-              {/* Top Row */}
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "flex-start",
-                  marginBottom: 10,
-                }}
-              >
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text
-                    style={{
-                      color: colors.text,
-                      fontSize: 14,
-                      fontWeight: "700",
-                      marginBottom: 6,
-                    }}
-                  >
+              {/* Top row */}
+              <View className="flex-row items-start justify-between mb-3">
+                <View className="flex-1 mr-2">
+                  <Text style={{ color: colors.text }} className="font-bold text-sm mb-1.5">
                     {sip.name}
                   </Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <View
-                      style={{
-                        backgroundColor:
-                          sip.type === "Equity" ? "#7c3aed" : "#f97316",
-                        paddingHorizontal: 8,
-                        paddingVertical: 3,
-                        borderRadius: 20,
-                      }}
-                    >
-                      <Text style={{ color: "white", fontSize: 10, fontWeight: "600" }}>
+                  <View className="flex-row items-center gap-2">
+                    <View style={{ backgroundColor: GOLD_SOFT }} className="px-2.5 py-1 rounded-full">
+                      <Text style={{ color: GOLD }} className="text-[10px] font-bold">
                         {sip.type}
                       </Text>
                     </View>
-                    <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
+                    <Text style={{ color: colors.textSecondary }} className="text-[11px]">
                       {sip.completed}/{sip.total} completed
                     </Text>
                   </View>
                 </View>
 
-                {/* Action Buttons */}
-                <View style={{ flexDirection: "row", gap: 8 }}>
+                <View className="flex-row gap-2">
                   <TouchableOpacity
-                    style={{
-                      width: 32,
-                      height: 32,
-                      backgroundColor: isDark ? colors.bg : "#f9fafb",
-                      borderRadius: 10,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      borderWidth: 1,
-                      borderColor: isDark ? colors.border : "#e5e7eb",
-                    }}
+                    style={{ backgroundColor: colors.inputBg, borderColor: colors.border }}
+                    className="w-8 h-8 rounded-lg items-center justify-center border"
                   >
                     <Pencil size={14} color={colors.textSecondary} />
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={{
-                      width: 32,
-                      height: 32,
-                      backgroundColor: isDark ? colors.bg : "#f9fafb",
-                      borderRadius: 10,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      borderWidth: 1,
-                      borderColor: isDark ? colors.border : "#e5e7eb",
-                    }}
+                    style={{ backgroundColor: colors.inputBg, borderColor: colors.border }}
+                    className="w-8 h-8 rounded-lg items-center justify-center border"
                   >
                     <Pause size={14} color={colors.textSecondary} />
                   </TouchableOpacity>
                 </View>
               </View>
 
-              {/* Monthly + Next Date */}
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  marginBottom: 12,
-                }}
-              >
+              {/* Monthly + next date */}
+              <View className="flex-row justify-between mb-3">
                 <View>
-                  <Text style={{ color: colors.textSecondary, fontSize: 11, marginBottom: 2 }}>
+                  <Text style={{ color: colors.textSecondary }} className="text-[11px] mb-0.5">
                     Monthly Amount
                   </Text>
-                  <Text style={{ color: colors.text, fontSize: 16, fontWeight: "800" }}>
+                  <Text style={{ color: colors.text }} className="text-base font-bold">
                     {formatINR(sip.monthlyAmount)}
                   </Text>
                 </View>
-                <View style={{ alignItems: "flex-end" }}>
-                  <Text style={{ color: colors.textSecondary, fontSize: 11, marginBottom: 2 }}>
+                <View className="items-end">
+                  <Text style={{ color: colors.textSecondary }} className="text-[11px] mb-0.5">
                     Next Installment
                   </Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <View className="flex-row items-center gap-1">
                     <Calendar size={12} color={colors.textSecondary} />
-                    <Text style={{ color: colors.text, fontSize: 13, fontWeight: "600" }}>
+                    <Text style={{ color: colors.text }} className="text-xs font-semibold">
                       {sip.nextDate}
                     </Text>
                   </View>
                 </View>
               </View>
 
-              {/* Progress Bar */}
+              {/* Progress bar */}
               <View
-                style={{
-                  height: 5,
-                  backgroundColor: isDark ? colors.border : "#f3f4f6",
-                  borderRadius: 3,
-                  marginBottom: 12,
-                }}
+                style={{ backgroundColor: colors.border }}
+                className="h-1.5 rounded-full mb-3 overflow-hidden"
               >
-                <LinearGradient
-                  colors={["#9333ea", "#ec4899"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={{
-                    height: 5,
-                    borderRadius: 3,
-                    width: `${progress}%`,
-                  }}
+                <View
+                  style={{ backgroundColor: GOLD, width: `${progress}%` }}
+                  className="h-full rounded-full"
                 />
               </View>
 
-              {/* Bottom Row */}
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
+              {/* Bottom row */}
+              <View className="flex-row items-center justify-between">
                 <View>
-                  <Text style={{ color: colors.textSecondary, fontSize: 11, marginBottom: 2 }}>
+                  <Text style={{ color: colors.textSecondary }} className="text-[11px] mb-0.5">
                     Total Invested
                   </Text>
-                  <Text style={{ color: colors.text, fontSize: 13, fontWeight: "700" }}>
+                  <Text style={{ color: colors.text }} className="text-xs font-bold">
                     {formatINR(sip.totalInvested)}
                   </Text>
                 </View>
                 <View>
-                  <Text style={{ color: colors.textSecondary, fontSize: 11, marginBottom: 2 }}>
+                  <Text style={{ color: colors.textSecondary }} className="text-[11px] mb-0.5">
                     Current Value
                   </Text>
-                  <Text style={{ color: colors.text, fontSize: 13, fontWeight: "700" }}>
+                  <Text style={{ color: colors.text }} className="text-xs font-bold">
                     {formatINR(sip.currentValue)}
                   </Text>
                 </View>
                 <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 4,
-                    backgroundColor: isDark ? "#14532d" : "#dcfce7",
-                    paddingHorizontal: 10,
-                    paddingVertical: 6,
-                    borderRadius: 20,
-                  }}
+                  style={{ backgroundColor: isDark ? GREEN_SOFT_DARK : GREEN_SOFT_LIGHT }}
+                  className="flex-row items-center gap-1 px-2.5 py-1.5 rounded-full"
                 >
-                  <TrendingUp size={12} color="#16a34a" />
-                  <Text style={{ color: "#16a34a", fontSize: 12, fontWeight: "700" }}>
+                  <TrendingUp size={12} color={GREEN} />
+                  <Text style={{ color: GREEN }} className="text-xs font-bold">
                     +{sip.returns}%
                   </Text>
                 </View>

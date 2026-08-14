@@ -119,10 +119,10 @@ export default function HomeScreen() {
   }, []);
 
   const tabs = [
-    { name: "Home", icon: Home, route: null },
-    { name: "Explore", icon: Search, route: null },
-    { name: "Portfolio", icon: PieChart, route: null },
-    { name: "AI Advisor", icon: Sparkles, route: null },
+    { name: "Home", icon: Home, route: "/home" },
+    { name: "Explore", icon: Search, route: "/explore" },
+    { name: "Portfolio", icon: PieChart, route: "/portfolio" },
+    { name: "AI Advisor", icon: Sparkles, route: "/ai-advisor" },
     { name: "Profile", icon: User, route: "/profile" },
   ];
 

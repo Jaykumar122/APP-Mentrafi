@@ -7,6 +7,7 @@ const router = Router();
 
 // SIGNUP
 router.post("/signup", async (req: Request, res: Response) => {
+  const client = await pool.connect();
   try {
     const { name, email, password } = req.body;
 
@@ -21,17 +22,37 @@ router.post("/signup", async (req: Request, res: Response) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const result = await pool.query(
-      "INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id, name, email",
-      [name, email, hashedPassword]
-    );
+    await client.query("BEGIN");
 
-    return res.status(201).json({
-      message: "Account created",
-      user: result.rows[0],
-    });
+    try {
+      const result = await client.query(
+        "INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id, name, email",
+        [name, email, hashedPassword]
+      );
+
+      await client.query(
+        `INSERT INTO personal_information (user_id, full_name)
+         VALUES ($1, $2)
+         ON CONFLICT (user_id) DO UPDATE SET
+           full_name = EXCLUDED.full_name,
+           updated_at = NOW()`,
+        [result.rows[0].id, name]
+      );
+
+      await client.query("COMMIT");
+
+      return res.status(201).json({
+        message: "Account created",
+        user: result.rows[0],
+      });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    }
   } catch {
     return res.status(500).json({ error: "Server error" });
+  } finally {
+    client.release();
   }
 });
 
