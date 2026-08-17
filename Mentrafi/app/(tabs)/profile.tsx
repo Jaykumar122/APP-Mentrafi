@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowLeft,
   Award,
@@ -41,23 +42,36 @@ import Animated, {
   useSharedValue,
 } from "react-native-reanimated";
 import * as ImageManipulator from "expo-image-manipulator";
-import { useTheme } from "../../context/ThemeContext";
+import Svg, { Defs, Ellipse, LinearGradient as SvgGrad, Path, RadialGradient, Stop } from "react-native-svg";
 import { API_URL } from "../../utils/api";
-
-// ---------------------------------------------------------------------------
-// Brand palette — matches the redesigned home screen (dark-navy + gold hero,
-// same treatment regardless of light/dark app theme).
-// ---------------------------------------------------------------------------
-const NAVY = "#12131c";
-const NAVY_SOFT = "rgba(255,255,255,0.10)";
-const NAVY_SOFT_2 = "rgba(255,255,255,0.15)";
-const NAVY_BORDER = "rgba(255,255,255,0.18)";
-const GOLD = "#D4AF37";
-const GOLD_SOFT = "rgba(212,175,55,0.16)";
-const GREEN_SOFT_LIGHT = "#dcfce7";
+import { AuthBackground, C, depthShadow } from "../(auth)/login";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const CROP_SIZE = SCREEN_WIDTH - 80; // large, full-screen-style viewfinder
+const GREEN = "#4ade80";
+
+// ─────────────────────────────────────────────
+// MINI CUBE — small isometric accent used as a corner watermark on the
+// stat cards, in a per-card accent color
+// ─────────────────────────────────────────────
+function MiniCube({ colorA, colorB }: { colorA: string; colorB: string }) {
+  return (
+    <Svg width="34" height="34" viewBox="0 0 60 60">
+      <Defs>
+        <SvgGrad id={`cubeTop-${colorA}`} x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0%" stopColor="#fff" stopOpacity="0.9" />
+          <Stop offset="100%" stopColor={colorA} stopOpacity="0.5" />
+        </SvgGrad>
+        <SvgGrad id={`cubeSide-${colorA}`} x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0%" stopColor={colorA} stopOpacity="0.55" />
+          <Stop offset="100%" stopColor={colorB} stopOpacity="0.35" />
+        </SvgGrad>
+      </Defs>
+      <Path d="M30,10 L50,20 L50,42 L30,52 L10,42 L10,20 Z" fill={`url(#cubeSide-${colorA})`} />
+      <Path d="M30,10 L50,20 L30,30 L10,20 Z" fill={`url(#cubeTop-${colorA})`} />
+    </Svg>
+  );
+}
 
 type MenuItem = {
   id: string;
@@ -95,21 +109,15 @@ type PersonalInfoForm = {
   location: string;
 };
 
-function Section({
-  title,
-  children,
-  colors,
-}: {
-  title: string;
-  children: React.ReactNode;
-  colors: any;
-  isDark: boolean;
-}) {
+// ─────────────────────────────────────────────
+// SECTION — same glass panel material used across the redesigned app
+// ─────────────────────────────────────────────
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <View style={{ marginBottom: 8 }}>
       <Text
         style={{
-          color: colors.textSecondary,
+          color: C.textFaint,
           fontSize: 11,
           fontWeight: "700",
           letterSpacing: 1.2,
@@ -121,10 +129,10 @@ function Section({
       </Text>
       <View
         style={{
-          backgroundColor: colors.cardBg,
+          backgroundColor: C.input,
           borderRadius: 20,
           borderWidth: 1,
-          borderColor: colors.border,
+          borderColor: C.inputBorder,
           overflow: "hidden",
         }}
       >
@@ -134,17 +142,7 @@ function Section({
   );
 }
 
-function MenuRow({
-  item,
-  last,
-  colors,
-  onPress,
-}: {
-  item: MenuItem;
-  last: boolean;
-  colors: any;
-  onPress?: () => void;
-}) {
+function MenuRow({ item, last, onPress }: { item: MenuItem; last: boolean; onPress?: () => void }) {
   const Icon = item.icon;
   return (
     <TouchableOpacity
@@ -156,55 +154,45 @@ function MenuRow({
         paddingHorizontal: 16,
         paddingVertical: 14,
         borderBottomWidth: last ? 0 : 1,
-        borderBottomColor: colors.divider,
+        borderBottomColor: C.inputBorder,
       }}
     >
-      <View
+      <LinearGradient
+        colors={[C.pink, C.violet]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
         style={{
           width: 40,
           height: 40,
           borderRadius: 20,
-          backgroundColor: GOLD_SOFT,
           alignItems: "center",
           justifyContent: "center",
           marginRight: 12,
         }}
       >
-        <Icon size={18} color={GOLD} />
-      </View>
-      <Text
-        style={{
-          flex: 1,
-          color: colors.text,
-          fontSize: 14,
-          fontWeight: "500",
-        }}
-      >
-        {item.label}
-      </Text>
+        <Icon size={18} color="#fff" />
+      </LinearGradient>
+      <Text style={{ flex: 1, color: "#fff", fontSize: 14, fontWeight: "500" }}>{item.label}</Text>
       {item.badge && (
         <View
           style={{
-            backgroundColor: GREEN_SOFT_LIGHT,
+            backgroundColor: "rgba(74,222,128,0.15)",
             paddingHorizontal: 8,
             paddingVertical: 3,
             borderRadius: 20,
             marginRight: 8,
           }}
         >
-          <Text style={{ color: "#16a34a", fontSize: 11, fontWeight: "700" }}>
-            {item.badge}
-          </Text>
+          <Text style={{ color: GREEN, fontSize: 11, fontWeight: "700" }}>{item.badge}</Text>
         </View>
       )}
-      <ChevronRight size={16} color={colors.textSecondary} />
+      <ChevronRight size={16} color={C.textFaint} />
     </TouchableOpacity>
   );
 }
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { colors, isDark } = useTheme();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -528,11 +516,12 @@ export default function ProfileScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView
-        style={{ flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }}
-      >
-        <ActivityIndicator color={GOLD} size="large" />
-      </SafeAreaView>
+      <View style={{ flex: 1, backgroundColor: C.bgBottom }}>
+        <AuthBackground />
+        <SafeAreaView style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator color={C.pink} size="large" />
+        </SafeAreaView>
+      </View>
     );
   }
 
@@ -548,18 +537,21 @@ export default function ProfileScreen() {
       value: `₹${((profile?.stats.portfolioValue ?? 0) / 100000).toFixed(2)}L`,
       sub: `${profile?.stats.portfolioReturnPercent && profile.stats.portfolioReturnPercent >= 0 ? "+" : ""}${profile?.stats.portfolioReturnPercent ?? 0}%`,
       isGreen: (profile?.stats.portfolioReturnPercent ?? 0) >= 0,
+      accent: C.pink,
     },
     {
       label: "Active SIPs",
       value: String(profile?.stats.activeSips ?? 0),
       sub: `₹${(profile?.stats.monthlySipAmount ?? 0).toLocaleString("en-IN")}/mo`,
       isGreen: false,
+      accent: C.violet,
     },
     {
       label: "Funds",
       value: String(profile?.stats.fundsHeld ?? 0),
       sub: "Holdings",
       isGreen: false,
+      accent: C.cyan,
     },
   ];
 
@@ -567,7 +559,7 @@ export default function ProfileScreen() {
   // awaiting confirmation. Renders on top of everything, including tab bar.
   if (pendingAvatar) {
     return (
-      <View style={{ flex: 1, backgroundColor: NAVY }}>
+      <View style={{ flex: 1, backgroundColor: C.bgBottom }}>
         <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
           {/* Header */}
           <View
@@ -601,9 +593,9 @@ export default function ProfileScreen() {
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               {uploadingAvatar ? (
-                <ActivityIndicator color={GOLD} size="small" />
+                <ActivityIndicator color={C.pink} size="small" />
               ) : (
-                <Text style={{ color: GOLD, fontSize: 15, fontWeight: "700" }}>
+                <Text style={{ color: C.pink, fontSize: 15, fontWeight: "700" }}>
                   Save
                 </Text>
               )}
@@ -620,7 +612,8 @@ export default function ProfileScreen() {
                 overflow: "hidden",
                 backgroundColor: "#000",
                 borderWidth: 2,
-                borderColor: GOLD,
+                borderColor: C.pink,
+                ...depthShadow("md"),
               }}
             >
               <GestureDetector gesture={composedGesture}>
@@ -634,7 +627,7 @@ export default function ProfileScreen() {
 
             <Text
               style={{
-                color: "rgba(255,255,255,0.6)",
+                color: C.textMuted,
                 fontSize: 13,
                 marginTop: 24,
                 textAlign: "center",
@@ -650,569 +643,647 @@ export default function ProfileScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={["bottom"]}>
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }}
-        showsVerticalScrollIndicator={false}
-        bounces={true}
-      >
-        {/* Header — dark navy + gold, matching the home screen hero */}
-        <View style={{ backgroundColor: NAVY, borderBottomLeftRadius: 32, borderBottomRightRadius: 32 }}>
-          {/* Header row */}
-          <View
+    <View style={{ flex: 1, backgroundColor: C.bgBottom }}>
+      <AuthBackground />
+      <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }}
+          showsVerticalScrollIndicator={false}
+          bounces={true}
+        >
+          {/* Header — same tilted glass-card material as the login/signup
+              cards and the home screen hero */}
+          <LinearGradient
+            colors={[C.card, "#050508"]}
+            start={{ x: 0.2, y: 0 }}
+            end={{ x: 0.8, y: 1 }}
             style={{
-              paddingHorizontal: 20,
-              paddingTop: 52,
-              paddingBottom: 16,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
+              borderBottomLeftRadius: 32,
+              borderBottomRightRadius: 32,
+              borderBottomWidth: 1,
+              borderColor: C.cardEdge,
+              overflow: "hidden",
             }}
           >
-            <TouchableOpacity
-              onPress={() => router.back()}
+            {/* Header row */}
+            <View
               style={{
-                width: 40,
-                height: 40,
-                backgroundColor: NAVY_SOFT,
-                borderRadius: 20,
+                paddingHorizontal: 20,
+                paddingTop: 52,
+                paddingBottom: 24,
+                flexDirection: "row",
                 alignItems: "center",
-                justifyContent: "center",
-                borderWidth: 1,
-                borderColor: NAVY_BORDER,
+                justifyContent: "space-between",
               }}
             >
-              <ArrowLeft size={18} color="white" />
-            </TouchableOpacity>
-
-            <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>
-              Profile
-            </Text>
-
-            <TouchableOpacity
-              style={{
-                width: 40,
-                height: 40,
-                backgroundColor: NAVY_SOFT,
-                borderRadius: 20,
-                alignItems: "center",
-                justifyContent: "center",
-                borderWidth: 1,
-                borderColor: NAVY_BORDER,
-              }}
-            >
-              <Settings size={18} color="white" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Profile Avatar */}
-          <View style={{ alignItems: "center", paddingBottom: 28 }}>
-            <View style={{ position: "relative", marginBottom: 12 }}>
-              <View
-                style={{
-                  width: 90,
-                  height: 90,
-                  borderRadius: 45,
-                  borderWidth: 3,
-                  borderColor: GOLD,
-                  overflow: "hidden",
-                  backgroundColor: NAVY_SOFT,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                {uploadingAvatar ? (
-                  <ActivityIndicator color={GOLD} />
-                ) : (
-                  <Image
-                    source={{ uri: avatarSource }}
-                    style={{ width: "100%", height: "100%" }}
-                  />
-                )}
-              </View>
               <TouchableOpacity
-                onPress={handleAvatarPencilPress}
-                disabled={uploadingAvatar}
+                onPress={() => router.back()}
                 style={{
-                  position: "absolute",
-                  bottom: 0,
-                  right: 0,
-                  width: 28,
-                  height: 28,
-                  borderRadius: 14,
-                  backgroundColor: GOLD,
-                  borderWidth: 2,
-                  borderColor: NAVY,
+                  width: 40,
+                  height: 40,
+                  backgroundColor: C.input,
+                  borderRadius: 20,
                   alignItems: "center",
                   justifyContent: "center",
+                  borderWidth: 1,
+                  borderColor: C.inputBorder,
                 }}
               >
-                <Pencil size={12} color={NAVY} />
+                <ArrowLeft size={18} color="white" />
+              </TouchableOpacity>
+
+              <Text style={{ color: "white", fontSize: 18, fontWeight: "700" }}>
+                Profile
+              </Text>
+
+              <TouchableOpacity
+                style={{
+                  width: 40,
+                  height: 40,
+                  backgroundColor: C.input,
+                  borderRadius: 20,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderWidth: 1,
+                  borderColor: C.inputBorder,
+                }}
+              >
+                <Settings size={18} color="white" />
               </TouchableOpacity>
             </View>
 
-            <Text
-              style={{
-                color: "white",
-                fontSize: 22,
-                fontWeight: "800",
-                marginBottom: 4,
-              }}
-            >
-              {profile?.name ?? "—"}
-            </Text>
-            <Text
-              style={{
-                color: "rgba(255,255,255,0.55)",
-                fontSize: 13,
-                marginBottom: 8,
-              }}
-            >
-              {profile?.email ?? ""}
-            </Text>
+            {/* Profile Avatar — floating 3D medallion: a grounding shadow,
+                an offset "edge" layer for coin-like thickness, a tilted
+                gradient ring, then the photo on top */}
+            <View style={{ alignItems: "center", paddingBottom: 28 }}>
+              <View style={{ width: 112, height: 118, alignItems: "center", marginBottom: 12 }}>
+                {/* grounding shadow, same ellipse-under-object trick used
+                    under the trophy and the coin stack */}
+                <Svg width="112" height="34" style={{ position: "absolute", bottom: -6 }}>
+                  <Defs>
+                    <RadialGradient id="avatarShadow" cx="50%" cy="50%" r="50%">
+                      <Stop offset="0%" stopColor="#000" stopOpacity="0.55" />
+                      <Stop offset="100%" stopColor="#000" stopOpacity="0" />
+                    </RadialGradient>
+                  </Defs>
+                  <Ellipse cx="56" cy="17" rx="40" ry="10" fill="url(#avatarShadow)" />
+                </Svg>
 
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-                backgroundColor: GOLD_SOFT,
-                paddingHorizontal: 12,
-                paddingVertical: 5,
-                borderRadius: 20,
-                borderWidth: 1,
-                borderColor: "rgba(212,175,55,0.35)",
-              }}
-            >
-              <Award size={13} color={GOLD} />
-              <Text style={{ color: GOLD, fontSize: 12, fontWeight: "700" }}>
-                {profile?.tier ?? "Standard Investor"}
-              </Text>
-            </View>
-
-            {/* Stats */}
-            <View
-              style={{
-                flexDirection: "row",
-                gap: 10,
-                marginTop: 20,
-                paddingHorizontal: 20,
-                width: "100%",
-              }}
-            >
-              {stats.map((stat) => (
                 <View
-                  key={stat.label}
                   style={{
-                    flex: 1,
-                    backgroundColor: NAVY_SOFT_2,
-                    borderRadius: 16,
-                    padding: 12,
-                    borderWidth: 1,
-                    borderColor: NAVY_BORDER,
+                    transform: [
+                      { perspective: 900 },
+                      { rotateX: "8deg" },
+                      { rotateY: "-6deg" },
+                    ],
                   }}
                 >
-                  <Text
+                  {/* edge layer — offset duplicate behind the ring gives it
+                      physical thickness, like a coin viewed at an angle */}
+                  <LinearGradient
+                    colors={["#5a1f42", "#2c1050"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
                     style={{
-                      color: "rgba(255,255,255,0.55)",
-                      fontSize: 10,
-                      marginBottom: 4,
+                      position: "absolute",
+                      top: 5,
+                      left: 4,
+                      width: 96,
+                      height: 96,
+                      borderRadius: 48,
                     }}
-                  >
-                    {stat.label}
-                  </Text>
-                  <Text
+                  />
+
+                  <LinearGradient
+                    colors={[C.pink, C.violet]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
                     style={{
-                      color: "white",
-                      fontSize: 16,
-                      fontWeight: "800",
-                      marginBottom: 4,
-                    }}
-                  >
-                    {stat.value}
-                  </Text>
-                  <View
-                    style={{
-                      flexDirection: "row",
+                      width: 96,
+                      height: 96,
+                      borderRadius: 48,
                       alignItems: "center",
-                      gap: 2,
+                      justifyContent: "center",
+                      ...depthShadow("md"),
                     }}
                   >
-                    {stat.isGreen && <TrendingUp size={10} color="#86efac" />}
-                    <Text
+                    <View
                       style={{
-                        color: stat.isGreen ? "#86efac" : "rgba(255,255,255,0.6)",
-                        fontSize: 10,
-                        fontWeight: "600",
+                        width: 88,
+                        height: 88,
+                        borderRadius: 44,
+                        overflow: "hidden",
+                        backgroundColor: C.input,
+                        alignItems: "center",
+                        justifyContent: "center",
                       }}
                     >
-                      {stat.sub}
-                    </Text>
-                  </View>
+                      {uploadingAvatar ? (
+                        <ActivityIndicator color={C.pink} />
+                      ) : (
+                        <Image
+                          source={{ uri: avatarSource }}
+                          style={{ width: "100%", height: "100%" }}
+                        />
+                      )}
+                    </View>
+                  </LinearGradient>
                 </View>
-              ))}
-            </View>
-          </View>
-        </View>
 
-        {/* Body */}
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: colors.bg,
-            paddingHorizontal: 20,
-            paddingBottom: 40,
-          }}
-        >
-          <Section title="Personal Information" colors={colors} isDark={isDark}>
-            <View style={{ padding: 16, gap: 14 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                <View>
-                  <Text style={{ color: colors.text, fontSize: 16, fontWeight: "700" }}>
-                    {profile?.name ?? "—"}
-                  </Text>
-                  <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
-                    {profile?.email ?? ""}
-                  </Text>
-                </View>
                 <TouchableOpacity
-                  onPress={openPersonalInfoEditor}
+                  onPress={handleAvatarPencilPress}
+                  disabled={uploadingAvatar}
                   style={{
-                    backgroundColor: GOLD_SOFT,
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: "rgba(212,175,55,0.25)",
+                    position: "absolute",
+                    bottom: 14,
+                    right: 2,
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                    backgroundColor: C.pink,
+                    borderWidth: 2,
+                    borderColor: C.bgBottom,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    ...depthShadow("sm"),
                   }}
                 >
-                  <Text style={{ color: GOLD, fontSize: 12, fontWeight: "700" }}>Edit</Text>
+                  <Pencil size={12} color="#fff" />
+
                 </TouchableOpacity>
               </View>
 
-              {[
-                { label: "Phone", value: profile?.personalInfo?.phone ?? "Not added yet" },
-                { label: "Date of Birth", value: profile?.personalInfo?.dateOfBirth ?? "Not added yet" },
-                { label: "Gender", value: profile?.personalInfo?.gender ?? "Not added yet" },
-                { label: "Location", value: profile?.personalInfo?.location ?? "Not added yet" },
-              ].map((field, idx) => (
-                <View
-                  key={field.label}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    paddingTop: idx === 0 ? 0 : 12,
-                    borderTopWidth: idx === 0 ? 0 : 1,
-                    borderTopColor: colors.divider,
-                  }}
-                >
-                  <Text style={{ color: colors.textSecondary, fontSize: 13 }}>{field.label}</Text>
-                  <Text style={{ color: colors.text, fontSize: 13, fontWeight: "600" }}>{field.value}</Text>
-                </View>
-              ))}
-            </View>
-          </Section>
-
-          <Section title="Account" colors={colors} isDark={isDark}>
-            {accountItems.map((item, idx) => (
-              <MenuRow
-                key={item.id}
-                item={item}
-                last={idx === accountItems.length - 1}
-                colors={colors}
-                onPress={item.id === "personal" ? openPersonalInfoEditor : undefined}
-              />
-            ))}
-          </Section>
-
-          <Section title="Preferences" colors={colors} isDark={isDark}>
-            {preferenceItems.map((item, idx) => (
-              <MenuRow
-                key={item.id}
-                item={item}
-                last={idx === preferenceItems.length - 1}
-                colors={colors}
-              />
-            ))}
-          </Section>
-
-          {/* Logout Button */}
-          <TouchableOpacity
-            onPress={handleLogout}
-            activeOpacity={0.85}
-            style={{
-              marginTop: 24,
-              backgroundColor: NAVY,
-              borderRadius: 20,
-              paddingVertical: 16,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.2,
-              shadowRadius: 8,
-              elevation: 6,
-            }}
-          >
-            <LogOut size={18} color={GOLD} />
-            <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>
-              Log Out
-            </Text>
-          </TouchableOpacity>
-
-          <Text
-            style={{
-              textAlign: "center",
-              color: colors.textSecondary,
-              fontSize: 12,
-              marginTop: 20,
-            }}
-          >
-            MentraFi v1.0.0
-          </Text>
-        </View>
-      </ScrollView>
-
-      {/* Avatar source picker — Take Photo (front camera) / Choose from Library */}
-      {showAvatarOptions && (
-        <View
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0,0,0,0.5)",
-            justifyContent: "flex-end",
-            zIndex: 100,
-          }}
-        >
-          <TouchableOpacity
-            style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
-            activeOpacity={1}
-            onPress={() => setShowAvatarOptions(false)}
-          />
-          <SafeAreaView edges={["bottom"]}>
-            <View
-              style={{
-                backgroundColor: colors.cardBg,
-                borderTopLeftRadius: 24,
-                borderTopRightRadius: 24,
-                paddingHorizontal: 16,
-                paddingTop: 8,
-                paddingBottom: 8,
-              }}
-            >
-              <View
-                style={{
-                  width: 36,
-                  height: 4,
-                  borderRadius: 2,
-                  backgroundColor: colors.border,
-                  alignSelf: "center",
-                  marginBottom: 12,
-                }}
-              />
               <Text
                 style={{
-                  textAlign: "center",
-                  color: colors.textSecondary,
-                  fontSize: 12,
-                  fontWeight: "700",
-                  letterSpacing: 1,
+                  color: "white",
+                  fontSize: 22,
+                  fontWeight: "800",
+                  marginBottom: 4,
+                }}
+              >
+                {profile?.name ?? "—"}
+              </Text>
+              <Text
+                style={{
+                  color: C.textMuted,
+                  fontSize: 13,
                   marginBottom: 8,
                 }}
               >
-                UPDATE PROFILE PHOTO
+                {profile?.email ?? ""}
               </Text>
 
-              <TouchableOpacity
-                onPress={handleTakePhoto}
-                activeOpacity={0.7}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  paddingVertical: 14,
-                  paddingHorizontal: 8,
-                  borderBottomWidth: 1,
-                  borderBottomColor: colors.divider,
-                }}
-              >
-                <View
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    backgroundColor: GOLD_SOFT,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    marginRight: 12,
-                  }}
-                >
-                  <CameraIcon size={17} color={GOLD} />
-                </View>
-                <Text style={{ color: colors.text, fontSize: 15, fontWeight: "500" }}>
-                  Take Photo
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={handlePickFromLibrary}
-                activeOpacity={0.7}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  paddingVertical: 14,
-                  paddingHorizontal: 8,
-                }}
-              >
-                <View
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    backgroundColor: GOLD_SOFT,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    marginRight: 12,
-                  }}
-                >
-                  <ImageIcon size={17} color={GOLD} />
-                </View>
-                <Text style={{ color: colors.text, fontSize: 15, fontWeight: "500" }}>
-                  Choose from Library
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => setShowAvatarOptions(false)}
-                activeOpacity={0.7}
-                style={{
-                  marginTop: 8,
-                  paddingVertical: 14,
-                  alignItems: "center",
-                  backgroundColor: colors.bg,
-                  borderRadius: 14,
-                }}
-              >
-                <Text style={{ color: colors.textSecondary, fontSize: 15, fontWeight: "600" }}>
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </SafeAreaView>
-        </View>
-      )}
-
-      <Modal
-        visible={showPersonalInfoEditor}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowPersonalInfoEditor(false)}
-      >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.55)",
-            justifyContent: "flex-end",
-          }}
-        >
-          <TouchableOpacity
-            style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
-            activeOpacity={1}
-            onPress={() => setShowPersonalInfoEditor(false)}
-          />
-          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
-            <View
-              style={{
-                backgroundColor: colors.cardBg,
-                borderTopLeftRadius: 28,
-                borderTopRightRadius: 28,
-                paddingHorizontal: 18,
-                paddingTop: 10,
-                paddingBottom: 24,
-              }}
-            >
               <View
                 style={{
-                  width: 40,
-                  height: 4,
-                  borderRadius: 999,
-                  backgroundColor: colors.border,
-                  alignSelf: "center",
-                  marginBottom: 14,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  backgroundColor: "rgba(255,79,129,0.14)",
+                  paddingHorizontal: 12,
+                  paddingVertical: 5,
+                  borderRadius: 20,
+                  borderWidth: 1,
+                  borderColor: "rgba(255,79,129,0.35)",
                 }}
-              />
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                <Text style={{ color: colors.text, fontSize: 18, fontWeight: "800" }}>
-                  Personal Information
+              >
+                <Award size={13} color={C.pink} />
+                <Text style={{ color: C.pink, fontSize: 12, fontWeight: "700" }}>
+                  {profile?.tier ?? "Standard Investor"}
                 </Text>
-                <TouchableOpacity onPress={() => setShowPersonalInfoEditor(false)}>
-                  <Text style={{ color: colors.textSecondary, fontSize: 14, fontWeight: "600" }}>Close</Text>
-                </TouchableOpacity>
               </View>
 
-              <View style={{ marginTop: 16, gap: 12 }}>
-                {[
-                  { label: "Full Name", key: "name", placeholder: "Enter your name" },
-                  { label: "Phone Number", key: "phone", placeholder: "Enter mobile number" },
-                  { label: "Date of Birth", key: "dateOfBirth", placeholder: "YYYY-MM-DD" },
-                  { label: "Gender", key: "gender", placeholder: "Male / Female / Other" },
-                  { label: "Location", key: "location", placeholder: "City or locality" },
-                ].map((field) => (
-                  <View key={field.key} style={{ gap: 6 }}>
-                    <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: "700" }}>
-                      {field.label}
-                    </Text>
-                    <TextInput
-                      value={personalInfoForm[field.key as keyof PersonalInfoForm]}
-                      onChangeText={(text) =>
-                        setPersonalInfoForm((prev) => ({ ...prev, [field.key]: text }))
-                      }
-                      placeholder={field.placeholder}
-                      placeholderTextColor={colors.textSecondary}
+              {/* Stats */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  gap: 10,
+                  marginTop: 20,
+                  paddingHorizontal: 20,
+                  width: "100%",
+                }}
+              >
+                {stats.map((stat) => (
+                  <View
+                    key={stat.label}
+                    style={{
+                      flex: 1,
+                      backgroundColor: C.input,
+                      borderRadius: 16,
+                      padding: 12,
+                      borderWidth: 1,
+                      borderColor: C.inputBorder,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <View style={{ position: "absolute", top: -6, right: -6, opacity: 0.9 }}>
+                      <MiniCube colorA={stat.accent} colorB={C.bgBottom} />
+                    </View>
+                    <Text
                       style={{
-                        backgroundColor: colors.bg,
-                        borderRadius: 16,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                        color: colors.text,
-                        paddingHorizontal: 14,
-                        paddingVertical: 13,
-                        fontSize: 14,
+                        color: C.textMuted,
+                        fontSize: 10,
+                        marginBottom: 4,
                       }}
-                    />
+                    >
+                      {stat.label}
+                    </Text>
+                    <Text
+                      style={{
+                        color: "white",
+                        fontSize: 16,
+                        fontWeight: "800",
+                        marginBottom: 4,
+                      }}
+                    >
+                      {stat.value}
+                    </Text>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 2,
+                      }}
+                    >
+                      {stat.isGreen && <TrendingUp size={10} color={GREEN} />}
+                      <Text
+                        style={{
+                          color: stat.isGreen ? GREEN : C.textMuted,
+                          fontSize: 10,
+                          fontWeight: "600",
+                        }}
+                      >
+                        {stat.sub}
+                      </Text>
+                    </View>
                   </View>
                 ))}
               </View>
+            </View>
+          </LinearGradient>
 
-              <TouchableOpacity
-                onPress={savePersonalInfo}
-                disabled={savingPersonalInfo}
+          {/* Body */}
+          <View
+            style={{
+              flex: 1,
+              paddingHorizontal: 20,
+              paddingBottom: 40,
+            }}
+          >
+            <Section title="Personal Information">
+              <View style={{ padding: 16, gap: 14 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <View>
+                    <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>
+                      {profile?.name ?? "—"}
+                    </Text>
+                    <Text style={{ color: C.textMuted, fontSize: 12, marginTop: 2 }}>
+                      {profile?.email ?? ""}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={openPersonalInfoEditor}
+                    style={{
+                      backgroundColor: "rgba(255,79,129,0.14)",
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      borderRadius: 999,
+                      borderWidth: 1,
+                      borderColor: "rgba(255,79,129,0.3)",
+                    }}
+                  >
+                    <Text style={{ color: C.pink, fontSize: 12, fontWeight: "700" }}>Edit</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {[
+                  { label: "Phone", value: profile?.personalInfo?.phone ?? "Not added yet" },
+                  { label: "Date of Birth", value: profile?.personalInfo?.dateOfBirth ?? "Not added yet" },
+                  { label: "Gender", value: profile?.personalInfo?.gender ?? "Not added yet" },
+                  { label: "Location", value: profile?.personalInfo?.location ?? "Not added yet" },
+                ].map((field, idx) => (
+                  <View
+                    key={field.label}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      paddingTop: idx === 0 ? 0 : 12,
+                      borderTopWidth: idx === 0 ? 0 : 1,
+                      borderTopColor: C.inputBorder,
+                    }}
+                  >
+                    <Text style={{ color: C.textMuted, fontSize: 13 }}>{field.label}</Text>
+                    <Text style={{ color: "#fff", fontSize: 13, fontWeight: "600" }}>{field.value}</Text>
+                  </View>
+                ))}
+              </View>
+            </Section>
+
+            <Section title="Account">
+              {accountItems.map((item, idx) => (
+                <MenuRow
+                  key={item.id}
+                  item={item}
+                  last={idx === accountItems.length - 1}
+                  onPress={item.id === "personal" ? openPersonalInfoEditor : undefined}
+                />
+              ))}
+            </Section>
+
+            <Section title="Preferences">
+              {preferenceItems.map((item, idx) => (
+                <MenuRow key={item.id} item={item} last={idx === preferenceItems.length - 1} />
+              ))}
+            </Section>
+
+            {/* Logout Button */}
+            <TouchableOpacity
+              onPress={handleLogout}
+              activeOpacity={0.85}
+              style={{
+                marginTop: 24,
+                backgroundColor: C.input,
+                borderWidth: 1,
+                borderColor: "rgba(255,79,129,0.3)",
+                borderRadius: 20,
+                paddingVertical: 16,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                ...depthShadow("sm"),
+              }}
+            >
+              <LogOut size={18} color={C.pink} />
+              <Text style={{ color: "white", fontWeight: "700", fontSize: 15 }}>
+                Log Out
+              </Text>
+            </TouchableOpacity>
+
+            <Text
+              style={{
+                textAlign: "center",
+                color: C.textFaint,
+                fontSize: 12,
+                marginTop: 20,
+              }}
+            >
+              MentraFi v1.0.0
+            </Text>
+          </View>
+        </ScrollView>
+
+        {/* Avatar source picker — Take Photo (front camera) / Choose from Library */}
+        {showAvatarOptions && (
+          <View
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(0,0,0,0.6)",
+              justifyContent: "flex-end",
+              zIndex: 100,
+            }}
+          >
+            <TouchableOpacity
+              style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+              activeOpacity={1}
+              onPress={() => setShowAvatarOptions(false)}
+            />
+            <SafeAreaView edges={["bottom"]}>
+              <View
                 style={{
-                  marginTop: 18,
-                  backgroundColor: NAVY,
-                  borderRadius: 18,
-                  paddingVertical: 14,
-                  alignItems: "center",
+                  backgroundColor: C.card,
+                  borderTopLeftRadius: 24,
+                  borderTopRightRadius: 24,
+                  borderWidth: 1,
+                  borderColor: C.cardEdge,
+                  paddingHorizontal: 16,
+                  paddingTop: 8,
+                  paddingBottom: 8,
                 }}
               >
-                {savingPersonalInfo ? (
-                  <ActivityIndicator color={GOLD} />
-                ) : (
-                  <Text style={{ color: "white", fontSize: 15, fontWeight: "800" }}>
-                    Save Changes
+                <View
+                  style={{
+                    width: 36,
+                    height: 4,
+                    borderRadius: 2,
+                    backgroundColor: C.inputBorder,
+                    alignSelf: "center",
+                    marginBottom: 12,
+                  }}
+                />
+                <Text
+                  style={{
+                    textAlign: "center",
+                    color: C.textFaint,
+                    fontSize: 12,
+                    fontWeight: "700",
+                    letterSpacing: 1,
+                    marginBottom: 8,
+                  }}
+                >
+                  UPDATE PROFILE PHOTO
+                </Text>
+
+                <TouchableOpacity
+                  onPress={handleTakePhoto}
+                  activeOpacity={0.7}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingVertical: 14,
+                    paddingHorizontal: 8,
+                    borderBottomWidth: 1,
+                    borderBottomColor: C.inputBorder,
+                  }}
+                >
+                  <LinearGradient
+                    colors={[C.pink, C.violet]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginRight: 12,
+                    }}
+                  >
+                    <CameraIcon size={17} color="#fff" />
+                  </LinearGradient>
+                  <Text style={{ color: "#fff", fontSize: 15, fontWeight: "500" }}>
+                    Take Photo
                   </Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
-    </SafeAreaView>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={handlePickFromLibrary}
+                  activeOpacity={0.7}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingVertical: 14,
+                    paddingHorizontal: 8,
+                  }}
+                >
+                  <LinearGradient
+                    colors={[C.pink, C.violet]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginRight: 12,
+                    }}
+                  >
+                    <ImageIcon size={17} color="#fff" />
+                  </LinearGradient>
+                  <Text style={{ color: "#fff", fontSize: 15, fontWeight: "500" }}>
+                    Choose from Library
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => setShowAvatarOptions(false)}
+                  activeOpacity={0.7}
+                  style={{
+                    marginTop: 8,
+                    paddingVertical: 14,
+                    alignItems: "center",
+                    backgroundColor: C.input,
+                    borderRadius: 14,
+                  }}
+                >
+                  <Text style={{ color: C.textMuted, fontSize: 15, fontWeight: "600" }}>
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </SafeAreaView>
+          </View>
+        )}
+
+        <Modal
+          visible={showPersonalInfoEditor}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowPersonalInfoEditor(false)}
+        >
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: "rgba(0,0,0,0.6)",
+              justifyContent: "flex-end",
+            }}
+          >
+            <TouchableOpacity
+              style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+              activeOpacity={1}
+              onPress={() => setShowPersonalInfoEditor(false)}
+            />
+            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+              <View
+                style={{
+                  backgroundColor: C.card,
+                  borderTopLeftRadius: 28,
+                  borderTopRightRadius: 28,
+                  borderWidth: 1,
+                  borderColor: C.cardEdge,
+                  paddingHorizontal: 18,
+                  paddingTop: 10,
+                  paddingBottom: 24,
+                }}
+              >
+                <View
+                  style={{
+                    width: 40,
+                    height: 4,
+                    borderRadius: 999,
+                    backgroundColor: C.inputBorder,
+                    alignSelf: "center",
+                    marginBottom: 14,
+                  }}
+                />
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <Text style={{ color: "#fff", fontSize: 18, fontWeight: "800" }}>
+                    Personal Information
+                  </Text>
+                  <TouchableOpacity onPress={() => setShowPersonalInfoEditor(false)}>
+                    <Text style={{ color: C.textMuted, fontSize: 14, fontWeight: "600" }}>Close</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={{ marginTop: 16, gap: 12 }}>
+                  {[
+                    { label: "Full Name", key: "name", placeholder: "Enter your name" },
+                    { label: "Phone Number", key: "phone", placeholder: "Enter mobile number" },
+                    { label: "Date of Birth", key: "dateOfBirth", placeholder: "YYYY-MM-DD" },
+                    { label: "Gender", key: "gender", placeholder: "Male / Female / Other" },
+                    { label: "Location", key: "location", placeholder: "City or locality" },
+                  ].map((field) => (
+                    <View key={field.key} style={{ gap: 6 }}>
+                      <Text style={{ color: C.textMuted, fontSize: 12, fontWeight: "700" }}>
+                        {field.label}
+                      </Text>
+                      <TextInput
+                        value={personalInfoForm[field.key as keyof PersonalInfoForm]}
+                        onChangeText={(text) =>
+                          setPersonalInfoForm((prev) => ({ ...prev, [field.key]: text }))
+                        }
+                        placeholder={field.placeholder}
+                        placeholderTextColor={C.textFaint}
+                        style={{
+                          backgroundColor: C.input,
+                          borderRadius: 16,
+                          borderWidth: 1,
+                          borderColor: C.inputBorder,
+                          color: "#fff",
+                          paddingHorizontal: 14,
+                          paddingVertical: 13,
+                          fontSize: 14,
+                        }}
+                      />
+                    </View>
+                  ))}
+                </View>
+
+                <TouchableOpacity
+                  onPress={savePersonalInfo}
+                  disabled={savingPersonalInfo}
+                  style={{ marginTop: 18, ...depthShadow("sm") }}
+                >
+                  <LinearGradient
+                    colors={[C.pink, C.violet]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={{
+                      borderRadius: 18,
+                      paddingVertical: 14,
+                      alignItems: "center",
+                    }}
+                  >
+                    {savingPersonalInfo ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={{ color: "white", fontSize: 15, fontWeight: "800" }}>
+                        Save Changes
+                      </Text>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </KeyboardAvoidingView>
+          </View>
+        </Modal>
+      </SafeAreaView>
+    </View>
   );
 }
