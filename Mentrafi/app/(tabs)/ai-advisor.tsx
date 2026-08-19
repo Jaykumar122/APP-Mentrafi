@@ -1,4 +1,6 @@
-import { useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+import { LinearGradient } from "expo-linear-gradient";
 import {
   ChevronDown,
   Home,
@@ -11,6 +13,7 @@ import {
 } from "lucide-react-native";
 import { useState } from "react";
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -20,23 +23,32 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "../../context/ThemeContext";
+import { API_URL } from "../../utils/api";
+import BottomNav from "./BottomNav";
+import { AuthBackground, C, depthShadow } from "../(auth)/login";
 
 // ---------------------------------------------------------------------------
-// Brand palette — matches the redesigned home & profile screens.
+// Backend URL comes from utils/api.ts (handles Android emulator vs
+// physical device vs iOS automatically). See API_URL import above.
 // ---------------------------------------------------------------------------
-const NAVY = "#12131c";
-const NAVY_SOFT = "rgba(255,255,255,0.10)";
-const NAVY_BORDER = "rgba(255,255,255,0.18)";
-const GOLD = "#D4AF37";
-const GOLD_SOFT = "rgba(212,175,55,0.14)";
-const GOLD_BORDER = "rgba(212,175,55,0.35)";
-const GOLD_TEXT = "#8a6d1f";
+
+type RecommendedFund = {
+  id: string;
+  schemeCode?: number;
+  name: string;
+  category: string;
+  subcategory: string;
+  rating: number;
+  oneYearReturn: number | null;
+  fiveYearReturn: number | null;
+  nav: number | null;
+};
 
 type ChatMessage = {
   id: string;
   role: "ai" | "user";
   text: string;
+  recommendedFunds?: RecommendedFund[];
 };
 
 const suggestions = [
@@ -51,12 +63,73 @@ const suggestions = [
 const WELCOME_MESSAGE =
   "Hi! I'm Mentrafi AI — your personal fund advisor. Tell me your investment goal, risk appetite, or just ask anything about mutual funds.";
 
+const GREEN = "#4ade80";
+
+function StarRow({ rating }: { rating: number }) {
+  const rounded = Math.round(rating);
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Sparkles key={i} size={12} color={i <= rounded ? C.pink : C.textFaint} />
+      ))}
+    </View>
+  );
+}
+
+function RecommendedFundCard({ fund }: { fund: RecommendedFund }) {
+  return (
+    <View
+      style={{
+        backgroundColor: C.input,
+        borderWidth: 1,
+        borderColor: C.inputBorder,
+        borderRadius: 20,
+        padding: 16,
+        marginTop: 12,
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12 }}>
+        <View style={{ flex: 1, marginRight: 12 }}>
+          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15, marginBottom: 2 }}>
+            {fund.name}
+          </Text>
+          <Text style={{ color: C.textFaint, fontSize: 12 }}>
+            {fund.category} · {fund.subcategory}
+          </Text>
+        </View>
+        <StarRow rating={fund.rating} />
+      </View>
+
+      <View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" }}>
+        <View style={{ flexDirection: "row", gap: 20 }}>
+          <View>
+            <Text style={{ color: C.textFaint, fontSize: 11, marginBottom: 4 }}>1Y Return</Text>
+            <Text style={{ color: GREEN, fontWeight: "700", fontSize: 13 }}>
+              {fund.oneYearReturn != null ? `+${fund.oneYearReturn}%` : "—"}
+            </Text>
+          </View>
+          <View>
+            <Text style={{ color: C.textFaint, fontSize: 11, marginBottom: 4 }}>5Y Return</Text>
+            <Text style={{ color: fund.fiveYearReturn != null ? GREEN : C.textFaint, fontWeight: "700", fontSize: 13 }}>
+              {fund.fiveYearReturn != null ? `+${fund.fiveYearReturn}%` : "—"}
+            </Text>
+          </View>
+          <View>
+            <Text style={{ color: C.textFaint, fontSize: 11, marginBottom: 4 }}>NAV</Text>
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>
+              {fund.nav != null ? `₹${fund.nav.toFixed(2)}` : "—"}
+            </Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 export default function AIAdvisorScreen() {
-  const router = useRouter();
-  const { colors, isDark } = useTheme();
-  const [activeTab, setActiveTab] = useState("AI Advisor");
   const [inputText, setInputText] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(true);
+  const [isTyping, setIsTyping] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
     { id: "welcome", role: "ai", text: WELCOME_MESSAGE },
   ]);
@@ -69,242 +142,419 @@ export default function AIAdvisorScreen() {
     { name: "Profile", icon: User, route: "/profile" },
   ];
 
-  const sendMessage = (text: string) => {
+  // -------------------------------------------------------------------------
+  // Streaming sendMessage — hits /api/advisor/chat/stream (SSE) and fills in
+  // the AI bubble's text progressively as chunks arrive, using XHR since
+  // fetch's streaming body reader isn't reliably supported in React Native.
+  // -------------------------------------------------------------------------
+  const sendMessage = async (text: string) => {
     const trimmed = text.trim();
-    if (!trimmed) return;
+    if (!trimmed || isTyping) return;
+
     setMessages((prev) => [
       ...prev,
       { id: `${Date.now()}-u`, role: "user", text: trimmed },
     ]);
     setInputText("");
     setShowSuggestions(false);
+    setIsTyping(true);
 
-    // Placeholder response — swap for the real GPT-4o call.
-    setTimeout(() => {
+    const token = await AsyncStorage.getItem("userToken");
+
+    if (!token) {
       setMessages((prev) => [
         ...prev,
         {
           id: `${Date.now()}-ai`,
           role: "ai",
-          text: "Let me look into that for you — this is where Mentrafi AI's response will appear.",
+          text: "You need to be logged in for me to give personalized recommendations. Please log in and try again.",
         },
       ]);
-    }, 500);
+      setIsTyping(false);
+      return;
+    }
+
+    const aiMessageId = `${Date.now()}-ai`;
+    let hasStartedStreaming = false;
+    let accumulatedText = "";
+    let lastProcessedLength = 0;
+    let sseBuffer = "";
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_URL}/api/advisor/chat/stream`);
+    xhr.setRequestHeader("Content-Type", "application/json");
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    // Local LLMs on CPU can be slow (a full response can take 40-60s+).
+    // Timeout is set generously above that so slow-but-working responses
+    // aren't killed early; the backend also sends SSE heartbeats so the
+    // OS-level connection doesn't get reaped as "idle" while we wait.
+    xhr.timeout = 120000;
+
+    xhr.onprogress = () => {
+      const newText = xhr.responseText.slice(lastProcessedLength);
+      lastProcessedLength = xhr.responseText.length;
+
+      // XHR progress events can split one SSE JSON line across multiple
+      // packets. Preserve the unfinished tail instead of discarding it and
+      // silently losing words/cards when JSON.parse sees only half a chunk.
+      sseBuffer += newText;
+      const lines = sseBuffer.split("\n");
+      sseBuffer = lines.pop() || "";
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (!trimmedLine.startsWith("data:")) continue;
+        const jsonStr = trimmedLine.slice(5).trim();
+        if (jsonStr === "[DONE]") continue;
+        try {
+          const parsed = JSON.parse(jsonStr);
+          const hasFunds = Array.isArray(parsed.recommendedFunds) && parsed.recommendedFunds.length > 0;
+          if (hasFunds) {
+            if (!hasStartedStreaming) {
+              hasStartedStreaming = true;
+              setMessages((prev) => [...prev, { id: aiMessageId, role: "ai", text: "", recommendedFunds: parsed.recommendedFunds }]);
+            } else {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === aiMessageId ? { ...m, recommendedFunds: parsed.recommendedFunds } : m
+                )
+              );
+            }
+          }
+
+          if (typeof parsed.chunk === "string") {
+            if (!hasStartedStreaming) {
+              hasStartedStreaming = true;
+              setMessages((prev) => [...prev, { id: aiMessageId, role: "ai", text: "" }]);
+            }
+            accumulatedText += parsed.chunk;
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === aiMessageId ? { ...m, text: accumulatedText } : m
+              )
+            );
+          }
+        } catch {
+          // incomplete JSON chunk, wait for more data
+        }
+      }
+    };
+
+    xhr.onerror = () => {
+      setIsTyping(false);
+      const errorText = hasStartedStreaming
+        ? "Lost connection to the advisor partway through. Here's what I got so far — feel free to ask again."
+        : "Couldn't reach the advisor. Make sure the backend and LM Studio are running, and that your device is on the same network.";
+      if (hasStartedStreaming) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === aiMessageId ? { ...m, text: m.text || errorText } : m))
+        );
+      } else {
+        setMessages((prev) => [...prev, { id: aiMessageId, role: "ai", text: errorText }]);
+      }
+    };
+
+    xhr.ontimeout = () => {
+      setIsTyping(false);
+      const timeoutText = "The advisor is taking too long to respond. Make sure the LM Studio server is running and try again.";
+      if (hasStartedStreaming) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === aiMessageId ? { ...m, text: m.text || timeoutText } : m))
+        );
+      } else {
+        setMessages((prev) => [...prev, { id: aiMessageId, role: "ai", text: timeoutText }]);
+      }
+    };
+
+    xhr.onload = () => {
+      setIsTyping(false);
+      if (!accumulatedText) {
+        const fallbackText = "Sorry, I couldn't generate a recommendation right now.";
+        if (hasStartedStreaming) {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === aiMessageId ? { ...m, text: fallbackText } : m))
+          );
+        } else {
+          setMessages((prev) => [...prev, { id: aiMessageId, role: "ai", text: fallbackText }]);
+        }
+      }
+    };
+
+    xhr.send(JSON.stringify({ message: trimmed }));
   };
 
   const resetChat = () => {
     setMessages([{ id: "welcome", role: "ai", text: WELCOME_MESSAGE }]);
     setShowSuggestions(true);
+    setIsTyping(false);
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={["bottom"]}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
-      >
-        {/* Header */}
-        <View
-          style={{
-            backgroundColor: NAVY,
-            paddingTop: 52,
-            paddingBottom: 18,
-            paddingHorizontal: 20,
-            overflow: "hidden",
-          }}
+    <View style={{ flex: 1, backgroundColor: C.bgBottom }}>
+      <AuthBackground />
+      <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
         >
-          {/* decorative gold blob */}
-          <View
+          {/* Header — same glass-card material as the profile hero */}
+          <LinearGradient
+            colors={[C.card, "#050508"]}
+            start={{ x: 0.2, y: 0 }}
+            end={{ x: 0.8, y: 1 }}
             style={{
-              position: "absolute",
-              top: -30,
-              right: -30,
-              width: 120,
-              height: 120,
-              borderRadius: 60,
-              backgroundColor: "rgba(212,175,55,0.55)",
+              paddingTop: 52,
+              paddingBottom: 18,
+              paddingHorizontal: 20,
+              overflow: "hidden",
+              borderBottomWidth: 1,
+              borderColor: C.cardEdge,
             }}
-          />
+          >
+            {/* decorative glow blob */}
+            <View
+              style={{
+                position: "absolute",
+                top: -30,
+                right: -30,
+                width: 120,
+                height: 120,
+                borderRadius: 60,
+                backgroundColor: "rgba(255,79,129,0.25)",
+              }}
+            />
 
-          <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center gap-3 flex-1">
-              <View
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}>
+                <LinearGradient
+                  colors={[C.pink, C.violet]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    ...depthShadow("sm"),
+                  }}
+                >
+                  <Sparkles size={20} color="#fff" />
+                </LinearGradient>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>
+                    Mentrafi AI Advisor
+                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
+                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: C.cyan }} />
+                    <Text style={{ color: C.textMuted, fontSize: 12 }}>
+                      {isTyping ? "Thinking..." : "Online · Local AI"}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                onPress={resetChat}
                 style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 22,
-                  backgroundColor: "rgba(0,0,0,0.35)",
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: C.input,
                   borderWidth: 1,
-                  borderColor: GOLD_BORDER,
+                  borderColor: C.inputBorder,
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
-                <Sparkles size={20} color={GOLD} />
-              </View>
-              <View className="flex-1">
-                <Text className="text-white font-bold text-base">
-                  Mentrafi AI Advisor
-                </Text>
-                <View className="flex-row items-center gap-1.5 mt-0.5">
-                  <View style={{ backgroundColor: GOLD }} className="w-1.5 h-1.5 rounded-full" />
-                  <Text style={{ color: "rgba(255,255,255,0.6)" }} className="text-xs">
-                    Online · Powered by GPT-4o
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            <TouchableOpacity
-              onPress={resetChat}
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 18,
-                backgroundColor: NAVY_SOFT,
-                borderWidth: 1,
-                borderColor: NAVY_BORDER,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <RefreshCw size={16} color="white" />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Chat body */}
-        <ScrollView
-          style={{ flex: 1, backgroundColor: colors.bg }}
-          contentContainerStyle={{ padding: 20, paddingBottom: 12 }}
-          showsVerticalScrollIndicator={false}
-        >
-          {messages.map((msg) =>
-            msg.role === "ai" ? (
-              <View key={msg.id} className="flex-row items-start gap-2.5 mb-5">
-                <View
-                  style={{ backgroundColor: GOLD_SOFT, borderColor: GOLD_BORDER }}
-                  className="w-9 h-9 rounded-full items-center justify-center border"
-                >
-                  <Sparkles size={16} color={GOLD} />
-                </View>
-                <View
-                  style={{ backgroundColor: colors.cardBg, borderColor: colors.border }}
-                  className="flex-1 rounded-2xl rounded-tl-md p-4 border"
-                >
-                  <Text style={{ color: colors.text }} className="text-sm leading-5">
-                    {msg.text}
-                  </Text>
-                </View>
-              </View>
-            ) : (
-              <View key={msg.id} className="items-end mb-5">
-                <View
-                  style={{ backgroundColor: NAVY }}
-                  className="max-w-[85%] rounded-2xl rounded-tr-md px-4 py-3"
-                >
-                  <Text className="text-white text-sm leading-5">{msg.text}</Text>
-                </View>
-              </View>
-            )
-          )}
-
-          {showSuggestions && (
-            <View className="mt-1">
-              <TouchableOpacity
-                onPress={() => setShowSuggestions((s) => !s)}
-                className="flex-row items-center gap-1.5 mb-3"
-              >
-                <ChevronDown size={15} color={colors.textSecondary} />
-                <Text style={{ color: colors.textSecondary }} className="text-xs font-medium">
-                  Try asking:
-                </Text>
+                <RefreshCw size={16} color="white" />
               </TouchableOpacity>
-
-              <View className="flex-row flex-wrap gap-2">
-                {suggestions.map((s) => (
-                  <TouchableOpacity
-                    key={s}
-                    onPress={() => sendMessage(s)}
-                    style={{ backgroundColor: GOLD_SOFT, borderColor: GOLD_BORDER }}
-                    className="px-4 py-2.5 rounded-full border"
-                  >
-                    <Text style={{ color: isDark ? GOLD : GOLD_TEXT }} className="text-xs font-medium">
-                      {s}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
             </View>
-          )}
-        </ScrollView>
+          </LinearGradient>
 
-        {/* Input bar */}
-        <View style={{ backgroundColor: colors.bg, paddingHorizontal: 16, paddingTop: 8 }}>
-          <View
-            style={{ backgroundColor: colors.inputBg, borderColor: colors.border }}
-            className="flex-row items-center rounded-full border px-2 py-1.5"
+          {/* Chat body */}
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ padding: 20, paddingBottom: 12 }}
+            showsVerticalScrollIndicator={false}
           >
-            <TextInput
-              value={inputText}
-              onChangeText={setInputText}
-              placeholder="Ask about any fund or goal..."
-              placeholderTextColor={colors.textSecondary}
-              style={{ color: colors.text, flex: 1, fontSize: 14, paddingHorizontal: 12 }}
-              onSubmitEditing={() => sendMessage(inputText)}
-              returnKeyType="send"
-            />
-            <TouchableOpacity
-              onPress={() => sendMessage(inputText)}
-              style={{ backgroundColor: GOLD }}
-              className="w-10 h-10 rounded-full items-center justify-center"
-            >
-              <Send size={16} color={NAVY} />
-            </TouchableOpacity>
-          </View>
-          <Text
-            style={{ color: colors.textSecondary }}
-            className="text-center text-[11px] mt-2 mb-2"
-          >
-            AI suggestions are not financial advice.
-          </Text>
-        </View>
+            {messages.map((msg) =>
+              msg.role === "ai" ? (
+                <View key={msg.id} style={{ flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 20 }}>
+                  <LinearGradient
+                    colors={[C.pink, C.violet]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Sparkles size={16} color="#fff" />
+                  </LinearGradient>
+                  <View
+                    style={{
+                      flex: 1,
+                      backgroundColor: C.input,
+                      borderColor: C.inputBorder,
+                      borderWidth: 1,
+                      borderRadius: 20,
+                      borderTopLeftRadius: 6,
+                      padding: 16,
+                    }}
+                  >
+                    <Text style={{ color: "#fff", fontSize: 14, lineHeight: 20 }}>{msg.text}</Text>
+                    {msg.recommendedFunds?.length ? (
+                      <View style={{ marginTop: 4 }}>
+                        {msg.recommendedFunds.map((fund) => (
+                          <RecommendedFundCard key={fund.id} fund={fund} />
+                        ))}
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+              ) : (
+                <View key={msg.id} style={{ alignItems: "flex-end", marginBottom: 20 }}>
+                  <LinearGradient
+                    colors={[C.pink, C.violet]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={{
+                      maxWidth: "85%",
+                      borderRadius: 20,
+                      borderTopRightRadius: 6,
+                      paddingHorizontal: 16,
+                      paddingVertical: 12,
+                    }}
+                  >
+                    <Text style={{ color: "#fff", fontSize: 14, lineHeight: 20 }}>{msg.text}</Text>
+                  </LinearGradient>
+                </View>
+              )
+            )}
 
-        {/* Bottom Navigation */}
-        <View
-          style={{ backgroundColor: colors.cardBg, borderTopColor: colors.divider }}
-          className="flex-row items-center justify-around px-2 pt-2 pb-2 border-t"
-        >
-          {tabs.map((tab) => {
-            const isActive = activeTab === tab.name;
-            return (
-              <TouchableOpacity
-                key={tab.name}
-                onPress={() => {
-                  setActiveTab(tab.name);
-                  if (tab.route) router.push(tab.route as any);
-                }}
-                className="items-center gap-1 flex-1"
-              >
-                <tab.icon size={22} color={isActive ? GOLD : colors.textSecondary} />
-                <Text
-                  className="text-[10px]"
+            {isTyping && (
+              <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 20 }}>
+                <LinearGradient
+                  colors={[C.pink, C.violet]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
                   style={{
-                    color: isActive ? GOLD : colors.textSecondary,
-                    fontWeight: isActive ? "600" : "400",
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    alignItems: "center",
+                    justifyContent: "center",
                   }}
                 >
-                  {tab.name}
-                </Text>
-                {isActive && (
-                  <View style={{ backgroundColor: GOLD }} className="w-1 h-1 rounded-full mt-0.5" />
-                )}
+                  <Sparkles size={16} color="#fff" />
+                </LinearGradient>
+                <View
+                  style={{
+                    backgroundColor: C.input,
+                    borderColor: C.inputBorder,
+                    borderWidth: 1,
+                    borderRadius: 20,
+                    borderTopLeftRadius: 6,
+                    paddingHorizontal: 16,
+                    paddingVertical: 14,
+                  }}
+                >
+                  <ActivityIndicator size="small" color={C.pink} />
+                </View>
+              </View>
+            )}
+
+            {showSuggestions && (
+              <View style={{ marginTop: 4 }}>
+                <TouchableOpacity
+                  onPress={() => setShowSuggestions((s) => !s)}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 12 }}
+                >
+                  <ChevronDown size={15} color={C.textMuted} />
+                  <Text style={{ color: C.textMuted, fontSize: 12, fontWeight: "500" }}>Try asking:</Text>
+                </TouchableOpacity>
+
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  {suggestions.map((s) => (
+                    <TouchableOpacity
+                      key={s}
+                      onPress={() => sendMessage(s)}
+                      disabled={isTyping}
+                      style={{
+                        backgroundColor: "rgba(255,79,129,0.12)",
+                        borderWidth: 1,
+                        borderColor: "rgba(255,79,129,0.3)",
+                        paddingHorizontal: 16,
+                        paddingVertical: 10,
+                        borderRadius: 999,
+                      }}
+                    >
+                      <Text style={{ color: C.pink, fontSize: 12, fontWeight: "500" }}>{s}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+          </ScrollView>
+
+          {/* Input bar */}
+          <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: C.input,
+                borderColor: C.inputBorder,
+                borderWidth: 1,
+                borderRadius: 999,
+                paddingHorizontal: 8,
+                paddingVertical: 6,
+              }}
+            >
+              <TextInput
+                value={inputText}
+                onChangeText={setInputText}
+                placeholder="Ask about any fund or goal..."
+                placeholderTextColor={C.textFaint}
+                editable={!isTyping}
+                style={{ color: "#fff", flex: 1, fontSize: 14, paddingHorizontal: 12 }}
+                onSubmitEditing={() => sendMessage(inputText)}
+                returnKeyType="send"
+              />
+              <TouchableOpacity
+                onPress={() => sendMessage(inputText)}
+                disabled={isTyping}
+                style={{ opacity: isTyping ? 0.5 : 1 }}
+              >
+                <LinearGradient
+                  colors={[C.pink, C.violet]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Send size={16} color="#fff" />
+                </LinearGradient>
               </TouchableOpacity>
-            );
-          })}
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+            </View>
+            <Text style={{ color: C.textFaint, textAlign: "center", fontSize: 11, marginTop: 8, marginBottom: 8 }}>
+              AI suggestions are not financial advice.
+            </Text>
+          </View>
+
+          {/* Bottom Navigation — shared component */}
+          <BottomNav tabs={tabs} paddingBottom={10} />
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </View>
   );
 }

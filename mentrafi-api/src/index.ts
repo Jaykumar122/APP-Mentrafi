@@ -7,7 +7,10 @@ import fundsRouter from "./routes/funds";
 import { syncAllFunds, syncAllFundsFast, isSyncRunning } from "./services/fundSync";
 import profileRoutes from "./routes/profile";
 import path from "path";
-
+import advisorRoutes from "./routes/advisor"
+import portfolioRoutes from "./routes/portfolio";
+import sipRoutes from "./routes/sip";
+import { processDueSIPs } from "./services/sip";
 dotenv.config();
 
 const app = express();
@@ -19,6 +22,9 @@ app.use(express.json());
 app.use("/api/auth", authRoutes);
 app.use("/api/funds", fundsRouter);
 app.use("/api/profile", profileRoutes);
+app.use("/api/advisor", advisorRoutes);
+app.use("/api/portfolio", portfolioRoutes);
+app.use("/api/sip", sipRoutes);
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 // Health check
@@ -105,6 +111,23 @@ cron.schedule(
     runSyncWhenFree(syncAllFunds, "Sunday weekly full sync")
       .then(() => console.log("✅ [Sun 6:00 AM] Weekly full sync finished."))
       .catch((err) => console.error("❌ [Sun 6:00 AM] Weekly full sync failed:", err));
+  },
+  { timezone: "Asia/Kolkata" }
+);
+
+// ---------------------------------------------------------------------------
+// Daily SIP installment processing (9:05 AM IST) — runs just after the
+// morning NAV safety-check sync so due SIPs buy units at a fresh NAV.
+// ---------------------------------------------------------------------------
+cron.schedule(
+  "5 9 * * *",
+  () => {
+    console.log("🔄 [9:05 AM] Processing due SIP installments...");
+    processDueSIPs()
+      .then(({ processed, failed }) =>
+        console.log(`✅ SIP installments processed: ${processed}, failed: ${failed}`)
+      )
+      .catch((err) => console.error("❌ SIP installment processing failed:", err));
   },
   { timezone: "Asia/Kolkata" }
 );

@@ -48,7 +48,8 @@ router.get("/", authenticateToken, async (req: AuthRequest, res) => {
     const user = userResult.rows[0];
 
     const personalInformationResult = await pool.query(
-      `SELECT full_name, phone, date_of_birth, gender, location FROM personal_information WHERE user_id = $1`,
+      `SELECT full_name, phone, date_of_birth, gender, location, age, monthly_sip_budget, risk_appetite, investment_goal
+       FROM personal_information WHERE user_id = $1`,
       [req.userId]
     );
     const personalInformation = personalInformationResult.rows[0] ?? null;
@@ -79,6 +80,10 @@ router.get("/", authenticateToken, async (req: AuthRequest, res) => {
         dateOfBirth,
         gender: personalInformation?.gender ?? null,
         location: personalInformation?.location ?? null,
+        age: personalInformation?.age ?? null,
+        monthlySipBudget: personalInformation?.monthly_sip_budget ?? null,
+        riskAppetite: personalInformation?.risk_appetite ?? null,
+        investmentGoal: personalInformation?.investment_goal ?? null,
       },
       memberSince: user.created_at,
       stats,
@@ -95,31 +100,91 @@ router.get("/", authenticateToken, async (req: AuthRequest, res) => {
 router.patch("/", authenticateToken, async (req: AuthRequest, res) => {
   const client = await pool.connect();
   try {
-    const { name, phone, dateOfBirth, gender, location, avatarUrl } = req.body;
+    const {
+      name,
+      phone,
+      dateOfBirth,
+      gender,
+      location,
+      avatarUrl,
+      age,
+      monthlySipBudget,
+      riskAppetite,
+      investmentGoal,
+    } = req.body;
+
+    // Validate age if provided
+    if (age !== null && age !== undefined) {
+      const ageNum = parseInt(age, 10);
+      if (isNaN(ageNum) || ageNum < 18 || ageNum > 100) {
+        return res.status(400).json({ error: "Age must be between 18 and 100" });
+      }
+    }
+
+    // Validate monthly SIP budget if provided
+    if (monthlySipBudget !== null && monthlySipBudget !== undefined) {
+      const budgetNum = parseFloat(monthlySipBudget);
+      if (isNaN(budgetNum) || budgetNum <= 0) {
+        return res.status(400).json({ error: "Monthly SIP budget must be a positive number" });
+      }
+    }
+
+    // Validate risk appetite if provided
+    if (riskAppetite && !("Low" === riskAppetite || "Moderate" === riskAppetite || "High" === riskAppetite)) {
+      return res.status(400).json({ error: "Risk appetite must be 'Low', 'Moderate', or 'High'" });
+    }
+
     await client.query("BEGIN");
 
     try {
       const userResult = await client.query(
         `UPDATE users SET
-          name = COALESCE($1, name),
-          avatar_url = COALESCE($2, avatar_url)
+         name = COALESCE($1, name),
+         avatar_url = COALESCE($2, avatar_url)
          WHERE id = $3
          RETURNING id, name, email, avatar_url, kyc_status, tier, created_at`,
         [name, avatarUrl, req.userId]
       );
 
       const personalInformationResult = await client.query(
-        `INSERT INTO personal_information (user_id, full_name, phone, date_of_birth, gender, location, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, NOW())
+        `INSERT INTO personal_information (
+           user_id,
+           full_name,
+           phone,
+           date_of_birth,
+           gender,
+           location,
+           age,
+           monthly_sip_budget,
+           risk_appetite,
+           investment_goal,
+           updated_at
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
          ON CONFLICT (user_id) DO UPDATE SET
            full_name = EXCLUDED.full_name,
            phone = EXCLUDED.phone,
            date_of_birth = EXCLUDED.date_of_birth,
            gender = EXCLUDED.gender,
            location = EXCLUDED.location,
+           age = EXCLUDED.age,
+           monthly_sip_budget = EXCLUDED.monthly_sip_budget,
+           risk_appetite = EXCLUDED.risk_appetite,
+           investment_goal = EXCLUDED.investment_goal,
            updated_at = NOW()
-         RETURNING full_name, phone, date_of_birth, gender, location`,
-        [req.userId, name, phone, dateOfBirth || null, gender, location]
+         RETURNING full_name, phone, date_of_birth, gender, location, age, monthly_sip_budget, risk_appetite, investment_goal`,
+        [
+         req.userId,
+         name,
+         phone,
+         dateOfBirth || null,
+         gender,
+         location,
+         age ?? null,
+         monthlySipBudget ?? null,
+         riskAppetite ?? null,
+         investmentGoal ?? null,
+        ]
       );
 
       await client.query("COMMIT");
@@ -135,13 +200,17 @@ router.patch("/", authenticateToken, async (req: AuthRequest, res) => {
         kycStatus: user.kyc_status,
         tier: user.tier,
         personalInfo: {
-          fullName: personalInformation?.full_name ?? user.name,
-          phone: personalInformation?.phone ?? null,
-          dateOfBirth: personalInformation?.date_of_birth
-            ? new Date(personalInformation.date_of_birth).toISOString().slice(0, 10)
-            : null,
-          gender: personalInformation?.gender ?? null,
-          location: personalInformation?.location ?? null,
+         fullName: personalInformation?.full_name ?? user.name,
+         phone: personalInformation?.phone ?? null,
+         dateOfBirth: personalInformation?.date_of_birth
+           ? new Date(personalInformation.date_of_birth).toISOString().slice(0, 10)
+           : null,
+         gender: personalInformation?.gender ?? null,
+         location: personalInformation?.location ?? null,
+         age: personalInformation?.age ?? null,
+         monthlySipBudget: personalInformation?.monthly_sip_budget ?? null,
+         riskAppetite: personalInformation?.risk_appetite ?? null,
+         investmentGoal: personalInformation?.investment_goal ?? null,
         },
       });
     } catch (error) {

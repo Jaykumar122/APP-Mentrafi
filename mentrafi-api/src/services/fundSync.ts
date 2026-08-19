@@ -46,6 +46,14 @@ type ReturnPeriods = {
   return10y: number | null;
 };
 
+// ---------------------------------------------------------------------------
+// findNavAtDate — finds the NAV entry closest to `monthsAgo` months back.
+// Returns null (rather than a bogus fallback) when the fund doesn't have
+// enough real history for that period, or when the closest match found is
+// too far from the target date to be trustworthy. This prevents funds
+// younger than 3/5/10 years from silently reporting since-inception
+// performance mislabeled as a 3Y/5Y/10Y return.
+// ---------------------------------------------------------------------------
 function findNavAtDate(
   navHistory: { date: string; nav: string }[],
   monthsAgo: number
@@ -53,6 +61,19 @@ function findNavAtDate(
   if (!navHistory.length) return null;
   const target = new Date();
   target.setMonth(target.getMonth() - monthsAgo);
+
+  // MFapi returns history newest-first, so the oldest entry is the last one.
+  const oldestEntry = navHistory[navHistory.length - 1];
+  const [od, om, oy] = oldestEntry.date.split("-").map(Number);
+  const oldestDate = new Date(oy, om - 1, od);
+
+  // Allow a small grace window (funds don't trade every calendar day),
+  // but if the target predates the fund's earliest NAV by more than that,
+  // there simply isn't a valid data point for this period.
+  const graceMs = 20 * 24 * 60 * 60 * 1000;
+  if (target.getTime() < oldestDate.getTime() - graceMs) {
+    return null;
+  }
 
   let closest = navHistory[navHistory.length - 1];
   let minDiff = Infinity;
@@ -65,12 +86,31 @@ function findNavAtDate(
       closest = entry;
     }
   }
+
+  // Reject matches that are still too far from the target (>45 days) —
+  // a sparse/stale match isn't a reliable basis for a return calculation.
+  const [cd, cm, cy] = closest.date.split("-").map(Number);
+  const closestDate = new Date(cy, cm - 1, cd);
+  const closestDiffMs = Math.abs(closestDate.getTime() - target.getTime());
+  if (closestDiffMs > 45 * 24 * 60 * 60 * 1000) {
+    return null;
+  }
+
   return parseFloat(closest.nav);
 }
 
 function computeReturn(latest: number, past: number | null): number | null {
   if (!past) return null;
   return Number((((latest - past) / past) * 100).toFixed(2));
+}
+
+// Annualized (CAGR) return — used for multi-year periods (3Y/5Y/10Y) so
+// numbers are comparable across funds and don't look inflated the way
+// raw cumulative returns do over longer windows.
+function computeCAGR(latest: number, past: number | null, years: number): number | null {
+  if (!past || past <= 0) return null;
+  const cagr = (Math.pow(latest / past, 1 / years) - 1) * 100;
+  return Number(cagr.toFixed(2));
 }
 
 function computeAllReturns(navHistory: { date: string; nav: string }[]): ReturnPeriods {
@@ -87,9 +127,9 @@ function computeAllReturns(navHistory: { date: string; nav: string }[]): ReturnP
     return3m: computeReturn(latest, findNavAtDate(navHistory, 3)),
     return6m: computeReturn(latest, findNavAtDate(navHistory, 6)),
     return1y: computeReturn(latest, findNavAtDate(navHistory, 12)),
-    return3y: computeReturn(latest, findNavAtDate(navHistory, 36)),
-    return5y: computeReturn(latest, findNavAtDate(navHistory, 60)),
-    return10y: computeReturn(latest, findNavAtDate(navHistory, 120)),
+    return3y: computeCAGR(latest, findNavAtDate(navHistory, 36), 3),
+    return5y: computeCAGR(latest, findNavAtDate(navHistory, 60), 5),
+    return10y: computeCAGR(latest, findNavAtDate(navHistory, 120), 10),
   };
 }
 

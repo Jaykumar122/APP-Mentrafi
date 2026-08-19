@@ -1,250 +1,91 @@
-import { router } from "expo-router";
-import { ArrowLeft, CheckCircle, Eye, EyeOff, Mail } from "lucide-react-native";
+import { useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Lock,
+  Mail,
+} from "lucide-react-native";
 import { useState } from "react";
 import {
+  ActivityIndicator,
+  Dimensions,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  StatusBar,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import Animated, {
-  FadeIn,
-  FadeInDown,
-  LinearTransition,
-} from "react-native-reanimated";
+import Animated, { FadeIn, FadeInDown, LinearTransition } from "react-native-reanimated";
+import Svg, { Circle, Defs, Ellipse, LinearGradient as SvgGrad, Path, RadialGradient, Stop } from "react-native-svg";
+import {
+  AuthBackground,
+  C,
+  cardTilt,
+  depthShadow,
+  ErrorBanner,
+  FieldInput,
+  GlowBackdrop,
+} from "./login";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const CARD_WIDTH = SCREEN_WIDTH - 44;
 
 type Step = "email" | "otp" | "password" | "success";
 
-const C = {
-  background: "#0d1b2a",
-  accent: "#b8943a",
-  accentGlow: "rgba(184,148,58,0.15)",
-  surface: "#f5f6f8",
-  textPrimary: "#0d1b2a",
-  textMuted: "#6b7280",
-  border: "rgba(13,27,42,0.1)",
-  white40: "rgba(255,255,255,0.40)",
-  white55: "rgba(255,255,255,0.55)",
-  white18: "rgba(255,255,255,0.18)",
-  error: "#dc2626",
-  errorBg: "#fee2e2",
-  success: "#22c55e",
-};
-
-const titleFont = Platform.select({
-  ios: "Georgia",
-  android: "serif",
-  default: undefined,
-});
-
-function BrandLogo() {
+// ─────────────────────────────────────────────
+// KEY ICON — isometric extruded key, built the same way as LockIcon
+// (front/top/side faces + gradient sheen) so the hero matches login
+// ─────────────────────────────────────────────
+function KeyIcon() {
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-      <View
-        style={{
-          width: 28,
-          height: 28,
-          borderRadius: 14,
-          borderWidth: 1.5,
-          borderColor: C.accent,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: "rgba(184,148,58,0.08)",
-        }}
-      >
-        <View
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: 4,
-            borderWidth: 1.5,
-            borderColor: C.accent,
-          }}
-        />
-      </View>
-      <Text
-        style={{
-          color: "#fff",
-          fontSize: 18,
-          fontWeight: "600",
-          fontFamily: titleFont,
-        }}
-      >
-        Mentrafi
-      </Text>
-    </View>
+    <Svg width="130" height="130" viewBox="0 0 150 150">
+      <Defs>
+        <SvgGrad id="keyHead" x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0%" stopColor="#ff9dbc" />
+          <Stop offset="100%" stopColor={C.pink} />
+        </SvgGrad>
+        <SvgGrad id="keyHeadSide" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0%" stopColor="#b23360" />
+          <Stop offset="100%" stopColor="#7a1f42" />
+        </SvgGrad>
+        <SvgGrad id="keyShaft" x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0%" stopColor="#c9b3ff" />
+          <Stop offset="100%" stopColor={C.violet} />
+        </SvgGrad>
+      </Defs>
+
+      {/* shaft */}
+      <Path d="M78,66 L120,108 L108,120 L100,112 L92,120 L82,110 L94,98 L78,82 Z" fill="url(#keyShaft)" />
+      <Path d="M120,108 L124,104 L108,88 L104,92 Z" fill="#4c2794" opacity="0.6" />
+
+      {/* teeth */}
+      <Path d="M100,112 L92,120 L86,114 L94,106 Z" fill="url(#keyShaft)" />
+      <Path d="M108,120 L98,130 L92,124 L102,114 Z" fill="url(#keyShaft)" opacity="0.9" />
+
+      {/* bow (head) — isometric ring */}
+      <Ellipse cx="54" cy="58" rx="30" ry="30" fill="url(#keyHeadSide)" />
+      <Ellipse cx="54" cy="52" rx="30" ry="30" fill="url(#keyHead)" />
+      <Circle cx="54" cy="52" r="13" fill="#050310" opacity="0.85" />
+      <Circle cx="54" cy="52" r="13" stroke="#fff" strokeOpacity="0.25" strokeWidth="1.5" fill="none" />
+
+      {/* highlight sheen */}
+      <Ellipse cx="44" cy="44" rx="10" ry="5" fill="#fff" opacity="0.35" />
+    </Svg>
   );
 }
 
-function Decorations() {
-  return (
-    <>
-      {/* Radial glow */}
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          top: -72,
-          right: -72,
-          width: 280,
-          height: 280,
-          borderRadius: 140,
-          backgroundColor: C.accentGlow,
-        }}
-      />
-      {/* Large gold circle */}
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          top: -24,
-          right: -24,
-          width: 144,
-          height: 144,
-          borderRadius: 72,
-          backgroundColor: C.accent,
-          opacity: 0.88,
-        }}
-      />
-      {/* Ghost circle */}
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          top: 180,
-          right: -64,
-          width: 168,
-          height: 168,
-          borderRadius: 84,
-          backgroundColor: "rgba(255,255,255,0.04)",
-          borderWidth: 1,
-          borderColor: "rgba(255,255,255,0.08)",
-        }}
-      />
-      {/* Gold-tinted circle */}
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          top: 220,
-          left: -52,
-          width: 136,
-          height: 136,
-          borderRadius: 68,
-          backgroundColor: C.accent,
-          opacity: 0.08,
-        }}
-      />
-      {/* Ring */}
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          bottom: 140,
-          left: -40,
-          width: 108,
-          height: 108,
-          borderRadius: 54,
-          borderWidth: 1,
-          borderColor: "rgba(184,148,58,0.14)",
-        }}
-      />
-    </>
-  );
-}
-
-interface InputFieldProps {
-  label: string;
-  value: string;
-  onChangeText: (v: string) => void;
-  placeholder: string;
-  icon: React.ReactNode;
-  isFocused: boolean;
-  onFocus: () => void;
-  onBlur: () => void;
-  keyboardType?: "default" | "email-address" | "phone-pad" | "numeric";
-  autoCapitalize?: "none" | "words" | "sentences";
-  secureTextEntry?: boolean;
-  rightElement?: React.ReactNode;
-  error?: string;
-  maxLength?: number;
-}
-
-function InputField({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  icon,
-  isFocused,
-  onFocus,
-  onBlur,
-  keyboardType = "default",
-  autoCapitalize = "sentences",
-  secureTextEntry = false,
-  rightElement,
-  error,
-  maxLength,
-}: InputFieldProps) {
-  return (
-    <View style={{ marginBottom: 16 }}>
-      <Text
-        style={{
-          fontSize: 12,
-          fontWeight: "600",
-          color: C.textMuted,
-          marginBottom: 8,
-        }}
-      >
-        {label}
-      </Text>
-      <View
-        style={{
-          minHeight: 52,
-          borderRadius: 14,
-          borderWidth: 1.5,
-          borderColor: error ? C.error : isFocused ? C.accent : C.border,
-          backgroundColor: C.surface,
-          paddingHorizontal: 14,
-          flexDirection: "row",
-          alignItems: "center",
-        }}
-      >
-        <View style={{ marginRight: 10 }}>{icon}</View>
-        <TextInput
-          value={value}
-          onChangeText={onChangeText}
-          placeholder={placeholder}
-          placeholderTextColor={C.textMuted}
-          keyboardType={keyboardType}
-          autoCapitalize={autoCapitalize}
-          secureTextEntry={secureTextEntry}
-          onFocus={onFocus}
-          onBlur={onBlur}
-          maxLength={maxLength}
-          style={{
-            flex: 1,
-            paddingVertical: Platform.OS === "ios" ? 15 : 12,
-            fontSize: 14,
-            color: C.textPrimary,
-          }}
-        />
-        {rightElement}
-      </View>
-      {error ? (
-        <Text style={{ color: C.error, fontSize: 11, marginTop: 5, marginLeft: 2 }}>
-          {error}
-        </Text>
-      ) : null}
-    </View>
-  );
-}
-
+// ─────────────────────────────────────────────
+// FORGOT PASSWORD SCREEN — same dark glass-card material, gradient
+// background, and hero construction as the login screen
+// ─────────────────────────────────────────────
 export default function ForgotPasswordScreen() {
+  const router = useRouter();
   const [step, setStep] = useState<Step>("email");
   const [emailOrPhone, setEmailOrPhone] = useState("");
   const [otp, setOtp] = useState("");
@@ -253,27 +94,22 @@ export default function ForgotPasswordScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [focused, setFocused] = useState<string | null>(null);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [error, setError] = useState("");
 
-  const f = (key: string) => ({
-    isFocused: focused === key,
-    onFocus: () => setFocused(key),
-    onBlur: () => setFocused(null),
-  });
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const phoneRegex = /^[0-9]{10,}$/;
 
   const handleSendOTP = async () => {
-    const e: Record<string, string> = {};
-    if (!emailOrPhone.trim()) {
-      e.emailOrPhone = "Email or mobile is required";
-    } else if (
-      emailOrPhone.includes("@") &&
-      !/\S+@\S+\.\S+/.test(emailOrPhone)
-    ) {
-      e.emailOrPhone = "Enter a valid email address";
+    setError("");
+    const identifier = emailOrPhone.trim();
+    if (!identifier) {
+      setError("Please enter your mobile number or email.");
+      return;
     }
-    setErrors(e);
-    if (Object.keys(e).length > 0) return;
+    if (!emailRegex.test(identifier) && !phoneRegex.test(identifier)) {
+      setError("Enter a valid mobile number or email.");
+      return;
+    }
 
     setLoading(true);
     setTimeout(() => {
@@ -283,14 +119,15 @@ export default function ForgotPasswordScreen() {
   };
 
   const handleVerifyOTP = async () => {
-    const e: Record<string, string> = {};
+    setError("");
     if (!otp.trim()) {
-      e.otp = "OTP is required";
-    } else if (otp.length !== 6) {
-      e.otp = "OTP must be 6 digits";
+      setError("OTP is required.");
+      return;
     }
-    setErrors(e);
-    if (Object.keys(e).length > 0) return;
+    if (otp.length !== 6) {
+      setError("OTP must be 6 digits.");
+      return;
+    }
 
     setLoading(true);
     setTimeout(() => {
@@ -300,19 +137,23 @@ export default function ForgotPasswordScreen() {
   };
 
   const handleResetPassword = async () => {
-    const e: Record<string, string> = {};
+    setError("");
     if (!newPassword.trim()) {
-      e.newPassword = "Password is required";
-    } else if (newPassword.length < 6) {
-      e.newPassword = "Minimum 6 characters";
+      setError("Password is required.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      setError("Minimum 6 characters.");
+      return;
     }
     if (!confirmPassword.trim()) {
-      e.confirmPassword = "Please confirm password";
-    } else if (confirmPassword !== newPassword) {
-      e.confirmPassword = "Passwords do not match";
+      setError("Please confirm your password.");
+      return;
     }
-    setErrors(e);
-    if (Object.keys(e).length > 0) return;
+    if (confirmPassword !== newPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
 
     setLoading(true);
     setTimeout(() => {
@@ -325,30 +166,42 @@ export default function ForgotPasswordScreen() {
   };
 
   const handleBack = () => {
+    setError("");
     if (step === "email") {
       router.back();
     } else if (step === "otp") {
       setStep("email");
       setOtp("");
-      setErrors({});
     } else if (step === "password") {
       setStep("otp");
       setNewPassword("");
       setConfirmPassword("");
-      setErrors({});
+    }
+  };
+
+  const getEyebrow = () => {
+    switch (step) {
+      case "email":
+        return "RESET PASSWORD";
+      case "otp":
+        return "VERIFY IT'S YOU";
+      case "password":
+        return "NEW PASSWORD";
+      case "success":
+        return "ALL SET";
     }
   };
 
   const getHeadline = () => {
     switch (step) {
       case "email":
-        return "Forgot\npassword?";
+        return "Forgot your password?";
       case "otp":
-        return "Verify\nyour identity.";
+        return "Verify your identity";
       case "password":
-        return "Create new\npassword.";
+        return "Create a new password";
       case "success":
-        return "Password\nreset!";
+        return "Password reset!";
     }
   };
 
@@ -366,121 +219,184 @@ export default function ForgotPasswordScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: C.background }}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-      <View style={{ flex: 1, paddingTop: Platform.OS === "android" ? StatusBar.currentHeight || 0 : 0 }}>
-        <Decorations />
+    <View style={{ flex: 1, backgroundColor: C.bgBottom }}>
+      <AuthBackground />
 
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+        <ScrollView
+          contentContainerStyle={{
+            flexGrow: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            paddingVertical: 40,
+          }}
+          keyboardShouldPersistTaps="handled"
         >
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingBottom: 48 }}
+          <View
+            style={{
+              width: CARD_WIDTH,
+              ...depthShadow("lg"),
+              ...cardTilt,
+            }}
           >
-            {/* HEADER */}
-            <View style={{ paddingHorizontal: 24, paddingTop: 20, paddingBottom: 24, zIndex: 5 }}>
-              {/* Back button */}
+            <LinearGradient
+              colors={[C.card, "#050508"]}
+              start={{ x: 0.2, y: 0 }}
+              end={{ x: 0.8, y: 1 }}
+              style={{
+                borderRadius: 36,
+                borderWidth: 1,
+                borderColor: C.cardEdge,
+                overflow: "hidden",
+                paddingBottom: 30,
+              }}
+            >
+              <View
+                pointerEvents="none"
+                style={{
+                  position: "absolute",
+                  top: -40,
+                  left: -60,
+                  width: 140,
+                  height: 700,
+                  backgroundColor: "rgba(255,255,255,0.05)",
+                  transform: [{ rotate: "18deg" }],
+                }}
+              />
+
+              {/* Back button, floating above the hero */}
               {step !== "success" && (
                 <TouchableOpacity
                   onPress={handleBack}
                   activeOpacity={0.7}
                   style={{
+                    position: "absolute",
+                    top: 18,
+                    left: 18,
                     width: 36,
                     height: 36,
-                    borderRadius: 10,
-                    backgroundColor: "rgba(255,255,255,0.08)",
-                    justifyContent: "center",
+                    borderRadius: 18,
+                    backgroundColor: C.input,
+                    borderWidth: 1,
+                    borderColor: C.inputBorder,
                     alignItems: "center",
-                    marginBottom: 24,
-                    alignSelf: "flex-start",
+                    justifyContent: "center",
+                    zIndex: 5,
                   }}
                 >
-                  <ArrowLeft size={18} color="rgba(255,255,255,0.60)" />
+                  <ArrowLeft size={16} color="#fff" />
                 </TouchableOpacity>
               )}
 
-              {/* Logo */}
-              <View style={{ marginBottom: 32 }}>
-                <BrandLogo />
+              <View style={{ height: 190, alignItems: "center", justifyContent: "flex-end" }}>
+                <View style={{ position: "absolute", bottom: 0 }}>
+                  <GlowBackdrop from={C.pink} to={C.violet} />
+                </View>
+                <View style={{ marginBottom: 26, ...depthShadow("md") }}>
+                  {step === "success" ? (
+                    <View
+                      style={{
+                        width: 96,
+                        height: 96,
+                        borderRadius: 48,
+                        backgroundColor: "rgba(74,222,128,0.15)",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <CheckCircle size={48} color="#4ade80" />
+                    </View>
+                  ) : (
+                    <KeyIcon />
+                  )}
+                </View>
               </View>
 
-              {/* Headline */}
-              <Text
-                style={{
-                  color: "#fff",
-                  fontSize: 40,
-                  lineHeight: 44,
-                  fontWeight: "700",
-                  fontFamily: titleFont,
-                  marginBottom: 10,
-                  maxWidth: 260,
-                }}
-              >
-                {getHeadline()}
-              </Text>
-              <Text style={{ color: C.white40, fontSize: 15, lineHeight: 21 }}>
-                {getSubtext()}
-              </Text>
-            </View>
+              <View style={{ paddingHorizontal: 26 }}>
+                <Animated.View key={step} entering={FadeIn.duration(250)} layout={LinearTransition.duration(250)}>
+                  <Text
+                    style={{
+                      color: C.pink,
+                      fontSize: 10,
+                      fontWeight: "700",
+                      letterSpacing: 1.2,
+                      marginBottom: 10,
+                      textAlign: "center",
+                    }}
+                  >
+                    {getEyebrow()}
+                  </Text>
+                  <Text
+                    style={{
+                      color: "#fff",
+                      fontSize: 23,
+                      lineHeight: 29,
+                      fontWeight: "700",
+                      marginBottom: 6,
+                      textAlign: "center",
+                    }}
+                  >
+                    {getHeadline()}
+                  </Text>
+                  <Text
+                    style={{
+                      color: C.textMuted,
+                      fontSize: 12.5,
+                      lineHeight: 19,
+                      textAlign: "center",
+                      marginBottom: 26,
+                    }}
+                  >
+                    {getSubtext()}
+                  </Text>
+                </Animated.View>
 
-            {/* FORM CARD */}
-            <View style={{ paddingHorizontal: 16, zIndex: 5 }}>
-              <View
-                style={{
-                  backgroundColor: "#fff",
-                  borderRadius: 28,
-                  padding: 22,
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 16 },
-                  shadowOpacity: 0.28,
-                  shadowRadius: 28,
-                  elevation: 18,
-                  marginBottom: 16,
-                }}
-              >
-                {/* STEP 1: Email/Phone */}
+                {step !== "success" && <ErrorBanner message={error} />}
+
+                {/* STEP 1: Email / Mobile */}
                 {step === "email" && (
                   <Animated.View
                     entering={FadeInDown.duration(300).springify()}
                     layout={LinearTransition.duration(300)}
                   >
-                    <InputField
-                      label="Email / Mobile"
+                    <FieldInput
+                      icon={<Mail size={18} color={C.textMuted} />}
+                      placeholder="Mobile / Email"
                       value={emailOrPhone}
-                      onChangeText={(text) => {
-                        setEmailOrPhone(text);
-                        if (errors.emailOrPhone) setErrors({});
-                      }}
-                      placeholder="you@email.com"
-                      icon={<Mail size={16} color={focused === "email" ? C.accent : C.textMuted} />}
+                      onChangeText={setEmailOrPhone}
                       keyboardType="email-address"
-                      autoCapitalize="none"
-                      error={errors.emailOrPhone}
-                      {...f("email")}
                     />
 
                     <TouchableOpacity
                       onPress={handleSendOTP}
-                      activeOpacity={0.85}
+                      activeOpacity={0.88}
                       disabled={loading}
-                      style={{
-                        backgroundColor: emailOrPhone.trim() ? C.background : "rgba(13,27,42,0.30)",
-                        borderRadius: 16,
-                        paddingVertical: 16,
-                        flexDirection: "row",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: 8,
-                        marginTop: 8,
-                      }}
+                      style={{ ...depthShadow("md"), opacity: loading ? 0.75 : 1, marginTop: 8 }}
                     >
-                      <Text style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}>
-                        {loading ? "Sending code..." : "Send verification code"}
-                      </Text>
-                      {!loading && <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700" }}>›</Text>}
+                      <LinearGradient
+                        colors={[C.pink, C.violet]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={{
+                          height: 54,
+                          borderRadius: 27,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexDirection: "row",
+                          gap: 8,
+                        }}
+                      >
+                        {loading ? (
+                          <ActivityIndicator color="#fff" />
+                        ) : (
+                          <>
+                            <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>
+                              Send verification code
+                            </Text>
+                            <ArrowRight size={17} color="#fff" />
+                          </>
+                        )}
+                      </LinearGradient>
                     </TouchableOpacity>
                   </Animated.View>
                 )}
@@ -491,53 +407,48 @@ export default function ForgotPasswordScreen() {
                     entering={FadeInDown.duration(300).springify()}
                     layout={LinearTransition.duration(300)}
                   >
-                    <InputField
-                      label="Enter OTP"
-                      value={otp}
-                      onChangeText={(text) => {
-                        setOtp(text.replace(/[^0-9]/g, ""));
-                        if (errors.otp) setErrors({});
-                      }}
+                    <FieldInput
+                      icon={<KeyRound size={18} color={C.textMuted} />}
                       placeholder="000000"
-                      icon={<Mail size={16} color={focused === "otp" ? C.accent : C.textMuted} />}
-                      keyboardType="numeric"
-                      autoCapitalize="none"
-                      maxLength={6}
-                      error={errors.otp}
-                      {...f("otp")}
+                      value={otp}
+                      onChangeText={(text) => setOtp(text.replace(/[^0-9]/g, ""))}
+                      keyboardType="default"
                     />
 
-                    <TouchableOpacity activeOpacity={0.7} style={{ marginBottom: 20 }}>
-                      <Text
-                        style={{
-                          color: C.accent,
-                          fontSize: 13,
-                          fontWeight: "600",
-                          textAlign: "center",
-                        }}
-                      >
+                    <TouchableOpacity activeOpacity={0.7} style={{ marginBottom: 8 }}>
+                      <Text style={{ color: C.cyan, fontSize: 12.5, fontWeight: "600", textAlign: "center" }}>
                         Did not receive? Resend code
                       </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
                       onPress={handleVerifyOTP}
-                      activeOpacity={0.85}
+                      activeOpacity={0.88}
                       disabled={loading}
-                      style={{
-                        backgroundColor: otp.length === 6 ? C.background : "rgba(13,27,42,0.30)",
-                        borderRadius: 16,
-                        paddingVertical: 16,
-                        flexDirection: "row",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: 8,
-                      }}
+                      style={{ ...depthShadow("md"), opacity: loading ? 0.75 : 1, marginTop: 8 }}
                     >
-                      <Text style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}>
-                        {loading ? "Verifying..." : "Verify code"}
-                      </Text>
-                      {!loading && <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700" }}>›</Text>}
+                      <LinearGradient
+                        colors={[C.pink, C.violet]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={{
+                          height: 54,
+                          borderRadius: 27,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexDirection: "row",
+                          gap: 8,
+                        }}
+                      >
+                        {loading ? (
+                          <ActivityIndicator color="#fff" />
+                        ) : (
+                          <>
+                            <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>Verify code</Text>
+                            <ArrowRight size={17} color="#fff" />
+                          </>
+                        )}
+                      </LinearGradient>
                     </TouchableOpacity>
                   </Animated.View>
                 )}
@@ -548,147 +459,74 @@ export default function ForgotPasswordScreen() {
                     entering={FadeInDown.duration(300).springify()}
                     layout={LinearTransition.duration(300)}
                   >
-                    <InputField
-                      label="New Password"
+                    <FieldInput
+                      icon={<Lock size={18} color={C.textMuted} />}
+                      placeholder="New password"
                       value={newPassword}
-                      onChangeText={(text) => {
-                        setNewPassword(text);
-                        if (errors.newPassword) setErrors({});
-                      }}
-                      placeholder="••••••••"
-                      icon={<Mail size={16} color={focused === "newPassword" ? C.accent : C.textMuted} />}
-                      secureTextEntry={!showPassword}
-                      error={errors.newPassword}
-                      rightElement={
-                        <TouchableOpacity
-                          onPress={() => setShowPassword(!showPassword)}
-                          activeOpacity={0.7}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          {showPassword ? (
-                            <EyeOff size={18} color="#94a3b8" />
-                          ) : (
-                            <Eye size={18} color="#94a3b8" />
-                          )}
-                        </TouchableOpacity>
-                      }
-                      {...f("newPassword")}
+                      onChangeText={setNewPassword}
+                      secure={!showPassword}
+                      toggleSecure={() => setShowPassword((v) => !v)}
                     />
-
-                    <InputField
-                      label="Confirm Password"
+                    <FieldInput
+                      icon={<Lock size={18} color={C.textMuted} />}
+                      placeholder="Confirm password"
                       value={confirmPassword}
-                      onChangeText={(text) => {
-                        setConfirmPassword(text);
-                        if (errors.confirmPassword) setErrors({});
-                      }}
-                      placeholder="••••••••"
-                      icon={<Mail size={16} color={focused === "confirmPassword" ? C.accent : C.textMuted} />}
-                      secureTextEntry={!showConfirmPassword}
-                      error={errors.confirmPassword}
-                      rightElement={
-                        <TouchableOpacity
-                          onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                          activeOpacity={0.7}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          {showConfirmPassword ? (
-                            <EyeOff size={18} color="#94a3b8" />
-                          ) : (
-                            <Eye size={18} color="#94a3b8" />
-                          )}
-                        </TouchableOpacity>
-                      }
-                      {...f("confirmPassword")}
+                      onChangeText={setConfirmPassword}
+                      secure={!showConfirmPassword}
+                      toggleSecure={() => setShowConfirmPassword((v) => !v)}
                     />
 
                     <TouchableOpacity
                       onPress={handleResetPassword}
-                      activeOpacity={0.85}
+                      activeOpacity={0.88}
                       disabled={loading}
-                      style={{
-                        backgroundColor:
-                          newPassword.length >= 6 && confirmPassword === newPassword
-                            ? C.background
-                            : "rgba(13,27,42,0.30)",
-                        borderRadius: 16,
-                        paddingVertical: 16,
-                        flexDirection: "row",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: 8,
-                        marginTop: 8,
-                      }}
+                      style={{ ...depthShadow("md"), opacity: loading ? 0.75 : 1, marginTop: 8 }}
                     >
-                      <Text style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}>
-                        {loading ? "Resetting password..." : "Reset password"}
-                      </Text>
-                      {!loading && <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700" }}>›</Text>}
+                      <LinearGradient
+                        colors={[C.pink, C.violet]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={{
+                          height: 54,
+                          borderRadius: 27,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexDirection: "row",
+                          gap: 8,
+                        }}
+                      >
+                        {loading ? (
+                          <ActivityIndicator color="#fff" />
+                        ) : (
+                          <>
+                            <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>Reset password</Text>
+                            <ArrowRight size={17} color="#fff" />
+                          </>
+                        )}
+                      </LinearGradient>
                     </TouchableOpacity>
                   </Animated.View>
                 )}
 
-                {/* STEP 4: Success */}
-                {step === "success" && (
-                  <Animated.View
-                    entering={FadeIn.duration(400)}
-                    style={{ alignItems: "center", paddingVertical: 32 }}
-                  >
-                    <View
-                      style={{
-                        width: 80,
-                        height: 80,
-                        borderRadius: 40,
-                        backgroundColor: "rgba(34,197,94,0.15)",
-                        justifyContent: "center",
-                        alignItems: "center",
-                        marginBottom: 24,
-                      }}
-                    >
-                      <CheckCircle size={48} color={C.success} />
-                    </View>
-                    <Text
-                      style={{
-                        fontSize: 24,
-                        fontWeight: "700",
-                        color: C.textPrimary,
-                        marginBottom: 8,
-                        textAlign: "center",
-                      }}
-                    >
-                      Password Reset!
-                    </Text>
-                    <Text
-                      style={{
-                        fontSize: 14,
-                        color: C.textMuted,
-                        textAlign: "center",
-                        lineHeight: 20,
-                      }}
-                    >
-                      Your password has been reset successfully.{"\n"}Redirecting to login...
-                    </Text>
-                  </Animated.View>
-                )}
-              </View>
+                {/* STEP 4: Success — just the headline/subtext above, no extra content */}
 
-              {/* Legal */}
-              <Text
-                style={{
-                  textAlign: "center",
-                  fontSize: 10,
-                  color: "rgba(255,255,255,0.18)",
-                  lineHeight: 16,
-                  paddingHorizontal: 12,
-                }}
-              >
-                SEBI Reg. No. MF/021/05 · Investments subject to market risks.
-                Please read all scheme documents carefully.
-              </Text>
-            </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </View>
+                <Text
+                  style={{
+                    marginTop: 22,
+                    textAlign: "center",
+                    color: C.textFaint,
+                    fontSize: 10,
+                    lineHeight: 15,
+                  }}
+                >
+                  SEBI Reg. No. MF/021/05 · Investments subject to market risks. Please read all
+                  scheme documents carefully.
+                </Text>
+              </View>
+            </LinearGradient>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }

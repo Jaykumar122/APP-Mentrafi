@@ -1,4 +1,5 @@
-import { useRouter } from "expo-router";
+﻿import { useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   ChevronRight,
   Eye,
@@ -11,24 +12,17 @@ import {
   TrendingUp,
   User,
 } from "lucide-react-native";
-import { useMemo, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useEffect, useMemo, useState } from "react";
 import { FlatList, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
-import { useTheme } from "../../context/ThemeContext";
+import { API_URL } from "../../utils/api";
+import BottomNav from "./BottomNav";
+import { AuthBackground, C, depthShadow } from "../(auth)/login";
 
-// ---------------------------------------------------------------------------
-// Brand palette — matches home, explore, ai-advisor & profile screens.
-// ---------------------------------------------------------------------------
-const NAVY = "#12131c";
-const NAVY_SOFT = "rgba(255,255,255,0.06)";
-const NAVY_BORDER = "rgba(255,255,255,0.10)";
-const GOLD = "#D4AF37";
-const GOLD_SOFT = "rgba(212,175,55,0.16)";
-const GREEN = "#22c55e";
-const RED = "#ef4444";
-const BLUE = "#3b82f6";
-const PURPLE = "#8b5cf6";
+const GREEN = "#4ade80";
+const RED = "#ff6b81";
 
 type AssetClass = "Equity" | "Debt" | "Hybrid";
 
@@ -41,29 +35,36 @@ type Holding = {
   change: number;
 };
 
-const HOLDINGS: Holding[] = [
-  { id: "1", name: "HDFC Balanced Advantage Fund", assetClass: "Hybrid", units: 1250.45, value: 68420.3, change: 2.5 },
-  { id: "2", name: "SBI Small Cap Fund", assetClass: "Equity", units: 860.2, value: 48650.75, change: -1.2 },
-  { id: "3", name: "ICICI Prudential Bluechip Fund", assetClass: "Equity", units: 2130.0, value: 62340.0, change: 3.8 },
-  { id: "4", name: "Axis Midcap Fund", assetClass: "Equity", units: 540.1, value: 26270.45, change: 5.1 },
-  { id: "5", name: "Meridian Large Cap Growth", assetClass: "Equity", units: 420.8, value: 40000.0, change: 26.2 },
-  { id: "6", name: "Crestline Short Duration", assetClass: "Debt", units: 310.0, value: 21540.0, change: 1.1 },
-];
+type Allocation = { label: AssetClass; value: number; percent: number };
+
+type PortfolioData = {
+  totalValue: number;
+  investedValue: number;
+  gainValue: number;
+  gainPercent: number;
+  todayChange: number;
+  todayChangePercent: number;
+  xirr: number;
+  holdings: Holding[];
+  allocations: Allocation[];
+};
 
 const ASSET_COLORS: Record<AssetClass, string> = {
-  Equity: GOLD,
-  Hybrid: BLUE,
-  Debt: PURPLE,
+  Equity: C.pink,
+  Hybrid: C.cyan,
+  Debt: C.violet,
 };
 
 const FILTERS: ("All" | AssetClass)[] = ["All", "Equity", "Debt", "Hybrid"];
 
-const totalValue = HOLDINGS.reduce((sum, h) => sum + h.value, 0);
-const todayChange = 3420.75;
-const todayChangePercent = 1.42;
-const investedValue = "₹2.00L";
-const gainValue = "+₹45.6K";
-const xirrValue = "18.4%";
+// Compact Indian-style number formatting: 245680.5 -> "2.46L", 12500000 -> "1.25Cr"
+function formatCompact(value: number, decimals = 2): string {
+  const abs = Math.abs(value);
+  if (abs >= 1e7) return `${(value / 1e7).toFixed(decimals)}Cr`;
+  if (abs >= 1e5) return `${(value / 1e5).toFixed(decimals)}L`;
+  if (abs >= 1e3) return `${(value / 1e3).toFixed(decimals)}K`;
+  return value.toFixed(decimals);
+}
 
 function AllocationDonut({
   allocations,
@@ -84,7 +85,7 @@ function AllocationDonut({
         cx={size / 2}
         cy={size / 2}
         r={radius}
-        stroke={NAVY_SOFT}
+        stroke={C.inputBorder}
         strokeWidth={strokeWidth}
         fill="none"
       />
@@ -115,10 +116,38 @@ function AllocationDonut({
 
 export default function PortfolioScreen() {
   const router = useRouter();
-  const { colors, isDark } = useTheme();
   const [activeTab, setActiveTab] = useState("Portfolio");
   const [showBalance, setShowBalance] = useState(true);
   const [filter, setFilter] = useState<"All" | AssetClass>("All");
+  const [portfolio, setPortfolio] = useState<PortfolioData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  async function fetchPortfolio() {
+    try {
+      const token = await AsyncStorage.getItem("userToken");
+      if (!token) {
+        router.replace("/onboarding" as any);
+        return;
+      }
+      const res = await fetch(`${API_URL}/api/portfolio`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+      if (!res.ok) throw new Error("Failed to fetch portfolio");
+      const data = await res.json();
+      setPortfolio(data);
+    } catch (err) {
+      console.error("Portfolio fetch error:", err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    fetchPortfolio();
+  }, []);
 
   const tabs = [
     { name: "Home", icon: Home, route: "/home" },
@@ -128,278 +157,334 @@ export default function PortfolioScreen() {
     { name: "Profile", icon: User, route: "/profile" },
   ];
 
-  const allocations = useMemo(() => {
-    const byClass: Record<AssetClass, number> = { Equity: 0, Debt: 0, Hybrid: 0 };
-    HOLDINGS.forEach((h) => {
-      byClass[h.assetClass] += h.value;
-    });
-    return (Object.keys(byClass) as AssetClass[])
-      .map((label) => ({
-        label,
-        value: byClass[label],
-        percent: Math.round((byClass[label] / totalValue) * 1000) / 10,
-      }))
-      .filter((a) => a.value > 0);
-  }, []);
+  const allocations = portfolio?.allocations ?? [];
+  const totalValue = portfolio?.totalValue ?? 0;
+  const todayChange = portfolio?.todayChange ?? 0;
+  const todayChangePercent = portfolio?.todayChangePercent ?? 0;
+  const investedValue = `₹${formatCompact(portfolio?.investedValue ?? 0, 2)}`;
+  const gainValue = `${(portfolio?.gainValue ?? 0) >= 0 ? "+" : "-"}₹${formatCompact(
+    Math.abs(portfolio?.gainValue ?? 0),
+    1
+  )}`;
+  const xirrValue = `${(portfolio?.xirr ?? 0).toFixed(1)}%`;
+  const isTodayPositive = todayChangePercent >= 0;
+  const isGainPositive = (portfolio?.gainValue ?? 0) >= 0;
 
   const filteredHoldings = useMemo(() => {
-    if (filter === "All") return HOLDINGS;
-    return HOLDINGS.filter((h) => h.assetClass === filter);
-  }, [filter]);
+    const list = portfolio?.holdings ?? [];
+    if (filter === "All") return list;
+    return list.filter((h) => h.assetClass === filter);
+  }, [filter, portfolio]);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={["top", "bottom"]}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
-        {/* Header — navy, matches home screen hero */}
-        <View style={{ backgroundColor: NAVY }} className="px-6 pt-6 pb-8 rounded-b-[32px]">
-          <View className="flex-row items-center justify-between mb-6">
-            <View>
-              <Text className="text-white font-bold text-2xl mb-0.5">My Portfolio</Text>
-              <Text className="text-white/50 text-xs">Track your investments</Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => setShowBalance((s) => !s)}
-              style={{ backgroundColor: NAVY_SOFT }}
-              className="w-10 h-10 rounded-full items-center justify-center"
-            >
-              {showBalance ? (
-                <Eye size={18} color="rgba(255,255,255,0.6)" />
-              ) : (
-                <EyeOff size={18} color="rgba(255,255,255,0.6)" />
-              )}
-            </TouchableOpacity>
-          </View>
-
-          <View
-            style={{ backgroundColor: NAVY_SOFT, borderColor: NAVY_BORDER }}
-            className="rounded-3xl p-5 border"
+    <View style={{ flex: 1, backgroundColor: C.bgBottom }}>
+      <AuthBackground />
+      <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+          {/* Header — same glass-card gradient as the rest of the app */}
+          <LinearGradient
+            colors={[C.card, "#050508"]}
+            start={{ x: 0.2, y: 0 }}
+            end={{ x: 0.8, y: 1 }}
+            style={{
+              paddingHorizontal: 24,
+              paddingTop: 24,
+              paddingBottom: 32,
+              borderBottomLeftRadius: 32,
+              borderBottomRightRadius: 32,
+              borderBottomWidth: 1,
+              borderColor: C.cardEdge,
+            }}
           >
-            <Text style={{ color: GOLD }} className="text-xs font-semibold tracking-widest mb-2">
-              TOTAL VALUE
-            </Text>
-            <Text className="text-white text-[32px] font-bold mb-2">
-              {showBalance
-                ? `₹${totalValue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
-                : "₹••••••••"}
-            </Text>
-
-            <View className="flex-row items-center gap-2 mb-4">
-              <View className="flex-row items-center gap-1 bg-green-500/20 px-2.5 py-1 rounded-full">
-                <TrendingUp size={13} color="#86efac" />
-                <Text className="text-green-300 text-xs font-semibold">
-                  +{todayChangePercent}% today
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+              <View>
+                <Text style={{ color: "#fff", fontWeight: "700", fontSize: 24, marginBottom: 2 }}>
+                  My Portfolio
                 </Text>
+                <Text style={{ color: C.textMuted, fontSize: 12 }}>Track your investments</Text>
               </View>
-              <Text className="text-white/50 text-xs">
-                +₹{todayChange.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-              </Text>
-            </View>
-
-            <View
-              style={{ borderTopColor: NAVY_BORDER }}
-              className="flex-row justify-between pt-4 border-t"
-            >
-              <View className="items-start">
-                <Text className="text-white/45 text-[11px] mb-1">Invested</Text>
-                <Text className="text-white font-semibold text-sm">{investedValue}</Text>
-              </View>
-              <View className="items-start">
-                <Text className="text-white/45 text-[11px] mb-1">Gain</Text>
-                <Text className="text-green-300 font-semibold text-sm">{gainValue}</Text>
-              </View>
-              <View className="items-start">
-                <Text className="text-white/45 text-[11px] mb-1">XIRR</Text>
-                <Text style={{ color: GOLD }} className="font-semibold text-sm">
-                  {xirrValue}
-                </Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Asset Allocation */}
-        <View className="px-6 pt-6">
-          <Text style={{ color: colors.text }} className="font-bold text-lg mb-4">
-            Asset Allocation
-          </Text>
-
-          <View
-            style={{ backgroundColor: colors.cardBg, borderColor: colors.border }}
-            className="rounded-2xl border p-5 flex-row items-center"
-          >
-            <AllocationDonut allocations={allocations} />
-
-            <View className="flex-1 ml-5 gap-3">
-              {allocations.map((a) => (
-                <View key={a.label} className="flex-row items-center justify-between">
-                  <View className="flex-row items-center gap-2">
-                    <View
-                      style={{ backgroundColor: ASSET_COLORS[a.label] }}
-                      className="w-2.5 h-2.5 rounded-full"
-                    />
-                    <Text style={{ color: colors.text }} className="text-sm font-medium">
-                      {a.label}
-                    </Text>
-                  </View>
-                  <Text style={{ color: colors.textSecondary }} className="text-sm font-semibold">
-                    {a.percent}%
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        </View>
-
-        {/* Holdings */}
-        <View className="pt-6">
-          <View className="flex-row items-center justify-between px-6 mb-3">
-            <Text style={{ color: colors.text }} className="font-bold text-lg">
-              Holdings
-            </Text>
-            <Text style={{ color: colors.textSecondary }} className="text-xs">
-              {filteredHoldings.length} fund{filteredHoldings.length !== 1 ? "s" : ""}
-            </Text>
-          </View>
-
-          {/* Filter pills */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 24, gap: 8, marginBottom: 16 }}
-          >
-            {FILTERS.map((f) => {
-              const active = f === filter;
-              return (
-                <TouchableOpacity
-                  key={f}
-                  onPress={() => setFilter(f)}
-                  style={{
-                    backgroundColor: active ? NAVY : colors.cardBg,
-                    borderColor: active ? NAVY : colors.border,
-                  }}
-                  className="px-5 py-2.5 rounded-full border"
-                >
-                  <Text
-                    style={{ color: active ? "white" : colors.textSecondary }}
-                    className="text-sm font-medium"
-                  >
-                    {f}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-
-          <View className="px-6">
-            <View
-              style={{ backgroundColor: colors.cardBg, borderColor: colors.border }}
-              className="rounded-2xl border overflow-hidden"
-            >
-              <FlatList
-                data={filteredHoldings}
-                keyExtractor={(item) => item.id}
-                scrollEnabled={false}
-                renderItem={({ item, index }) => {
-                  const positive = item.change >= 0;
-                  return (
-                    <TouchableOpacity
-                      className="flex-row items-center px-4 py-3"
-                      style={{
-                        borderBottomWidth: index < filteredHoldings.length - 1 ? 1 : 0,
-                        borderBottomColor: colors.divider,
-                      }}
-                    >
-                      <View
-                        style={{ backgroundColor: positive ? GREEN : RED }}
-                        className="w-1 h-10 rounded-full mr-3"
-                      />
-                      <View
-                        style={{ backgroundColor: GOLD_SOFT }}
-                        className="w-9 h-9 rounded-full items-center justify-center mr-3"
-                      >
-                        {positive ? (
-                          <TrendingUp size={16} color={GOLD} />
-                        ) : (
-                          <TrendingDown size={16} color={GOLD} />
-                        )}
-                      </View>
-
-                      <View className="flex-1 mr-2">
-                        <Text
-                          style={{ color: colors.text }}
-                          numberOfLines={1}
-                          className="font-semibold text-sm mb-0.5"
-                        >
-                          {item.name}
-                        </Text>
-                        <Text style={{ color: colors.textSecondary }} className="text-xs">
-                          {item.assetClass} · {item.units.toFixed(2)} units
-                        </Text>
-                      </View>
-
-                      <View className="items-end mr-2">
-                        <Text style={{ color: colors.text }} className="font-bold text-sm">
-                          ₹{item.value.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                        </Text>
-                        <Text
-                          style={{ color: positive ? GREEN : RED }}
-                          className="text-xs font-semibold"
-                        >
-                          {positive ? "+" : ""}
-                          {item.change}%
-                        </Text>
-                      </View>
-
-                      <ChevronRight size={16} color={colors.textSecondary} />
-                    </TouchableOpacity>
-                  );
-                }}
-                ListEmptyComponent={
-                  <View className="items-center justify-center py-10">
-                    <Text style={{ color: colors.textSecondary }} className="text-sm">
-                      No holdings in this category.
-                    </Text>
-                  </View>
-                }
-              />
-            </View>
-          </View>
-        </View>
-      </ScrollView>
-
-      {/* Bottom Navigation */}
-      <View
-        style={{ backgroundColor: colors.cardBg, borderTopColor: colors.divider }}
-        className="flex-row items-center justify-around px-2 pt-2 pb-6 border-t"
-      >
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.name;
-          return (
-            <TouchableOpacity
-              key={tab.name}
-              onPress={() => {
-                setActiveTab(tab.name);
-                if (tab.route) router.push(tab.route as any);
-              }}
-              className="items-center gap-1 flex-1"
-            >
-              <tab.icon size={22} color={isActive ? GOLD : colors.textSecondary} />
-              <Text
-                className="text-[10px]"
+              <TouchableOpacity
+                onPress={() => setShowBalance((s) => !s)}
                 style={{
-                  color: isActive ? GOLD : colors.textSecondary,
-                  fontWeight: isActive ? "600" : "400",
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: C.input,
+                  borderWidth: 1,
+                  borderColor: C.inputBorder,
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
-                {tab.name}
+                {showBalance ? (
+                  <Eye size={18} color={C.textMuted} />
+                ) : (
+                  <EyeOff size={18} color={C.textMuted} />
+                )}
+              </TouchableOpacity>
+            </View>
+
+            <View
+              style={{
+                backgroundColor: C.input,
+                borderWidth: 1,
+                borderColor: C.inputBorder,
+                borderRadius: 24,
+                padding: 20,
+              }}
+            >
+              <Text style={{ color: C.pink, fontSize: 11, fontWeight: "700", letterSpacing: 1.2, marginBottom: 8 }}>
+                TOTAL VALUE
               </Text>
-              {isActive && (
-                <View style={{ backgroundColor: GOLD }} className="w-1 h-1 rounded-full mt-0.5" />
-              )}
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    </SafeAreaView>
+              <Text style={{ color: "#fff", fontSize: 32, fontWeight: "700", marginBottom: 8 }}>
+                {showBalance
+                  ? `₹${totalValue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
+                  : "₹••••••••"}
+              </Text>
+
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 4,
+                    backgroundColor: isTodayPositive ? "rgba(74,222,128,0.15)" : "rgba(255,107,129,0.15)",
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    borderRadius: 999,
+                  }}
+                >
+                  {isTodayPositive ? (
+                    <TrendingUp size={13} color={GREEN} />
+                  ) : (
+                    <TrendingDown size={13} color={RED} />
+                  )}
+                  <Text style={{ color: isTodayPositive ? GREEN : RED, fontSize: 12, fontWeight: "700" }}>
+                    {isTodayPositive ? "+" : ""}
+                    {todayChangePercent}% today
+                  </Text>
+                </View>
+                <Text style={{ color: C.textFaint, fontSize: 12 }}>
+                  {isTodayPositive ? "+" : "-"}₹{Math.abs(todayChange).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </Text>
+              </View>
+
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  paddingTop: 16,
+                  borderTopWidth: 1,
+                  borderTopColor: C.inputBorder,
+                }}
+              >
+                <View>
+                  <Text style={{ color: C.textFaint, fontSize: 11, marginBottom: 4 }}>Invested</Text>
+                  <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>{investedValue}</Text>
+                </View>
+                <View>
+                  <Text style={{ color: C.textFaint, fontSize: 11, marginBottom: 4 }}>Gain</Text>
+                  <Text style={{ color: isGainPositive ? GREEN : RED, fontWeight: "700", fontSize: 14 }}>{gainValue}</Text>
+                </View>
+                <View>
+                  <Text style={{ color: C.textFaint, fontSize: 11, marginBottom: 4 }}>XIRR</Text>
+                  <Text style={{ color: C.cyan, fontWeight: "700", fontSize: 14 }}>{xirrValue}</Text>
+                </View>
+              </View>
+            </View>
+          </LinearGradient>
+
+          {/* Asset Allocation */}
+          <View style={{ paddingHorizontal: 24, paddingTop: 24 }}>
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 17, marginBottom: 14 }}>
+              Asset Allocation
+            </Text>
+
+            <View
+              style={{
+                backgroundColor: C.input,
+                borderWidth: 1,
+                borderColor: C.inputBorder,
+                borderRadius: 20,
+                padding: 18,
+                flexDirection: "row",
+                alignItems: "center",
+              }}
+            >
+              <AllocationDonut allocations={allocations} />
+
+              <View style={{ flex: 1, marginLeft: 18, gap: 12 }}>
+                {allocations.map((a) => (
+                  <View key={a.label} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <View
+                        style={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: 5,
+                          backgroundColor: ASSET_COLORS[a.label],
+                        }}
+                      />
+                      <Text style={{ color: "#fff", fontSize: 13, fontWeight: "500" }}>{a.label}</Text>
+                    </View>
+                    <Text style={{ color: C.textMuted, fontSize: 13, fontWeight: "600" }}>{a.percent}%</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </View>
+
+          {/* Holdings */}
+          <View style={{ paddingTop: 24 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                paddingHorizontal: 24,
+                marginBottom: 12,
+              }}
+            >
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 17 }}>Holdings</Text>
+              <Text style={{ color: C.textFaint, fontSize: 12 }}>
+                {filteredHoldings.length} fund{filteredHoldings.length !== 1 ? "s" : ""}
+              </Text>
+            </View>
+
+            {/* Filter pills */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 24, gap: 8, marginBottom: 16 }}
+            >
+              {FILTERS.map((f) => {
+                const active = f === filter;
+                return (
+                  <TouchableOpacity key={f} onPress={() => setFilter(f)} activeOpacity={0.85}>
+                    {active ? (
+                      <LinearGradient
+                        colors={[C.pink, C.violet]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={{ paddingHorizontal: 20, paddingVertical: 10, borderRadius: 999 }}
+                      >
+                        <Text style={{ color: "#fff", fontSize: 13, fontWeight: "600" }}>{f}</Text>
+                      </LinearGradient>
+                    ) : (
+                      <View
+                        style={{
+                          backgroundColor: C.input,
+                          borderWidth: 1,
+                          borderColor: C.inputBorder,
+                          paddingHorizontal: 20,
+                          paddingVertical: 10,
+                          borderRadius: 999,
+                        }}
+                      >
+                        <Text style={{ color: C.textMuted, fontSize: 13, fontWeight: "500" }}>{f}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <View style={{ paddingHorizontal: 24 }}>
+              <View
+                style={{
+                  backgroundColor: C.input,
+                  borderWidth: 1,
+                  borderColor: C.inputBorder,
+                  borderRadius: 20,
+                  overflow: "hidden",
+                }}
+              >
+                <FlatList
+                  data={filteredHoldings}
+                  keyExtractor={(item) => item.id}
+                  scrollEnabled={false}
+                  renderItem={({ item, index }) => {
+                    const positive = item.change >= 0;
+                    return (
+                      <TouchableOpacity
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          paddingHorizontal: 16,
+                          paddingVertical: 13,
+                          borderBottomWidth: index < filteredHoldings.length - 1 ? 1 : 0,
+                          borderBottomColor: C.inputBorder,
+                        }}
+                      >
+                        <View
+                          style={{
+                            width: 3,
+                            height: 38,
+                            borderRadius: 2,
+                            marginRight: 12,
+                            backgroundColor: positive ? GREEN : RED,
+                          }}
+                        />
+                        <View
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 18,
+                            marginRight: 12,
+                            alignItems: "center",
+                            justifyContent: "center",
+                            backgroundColor: "rgba(255,79,129,0.14)",
+                          }}
+                        >
+                          {positive ? (
+                            <TrendingUp size={16} color={C.pink} />
+                          ) : (
+                            <TrendingDown size={16} color={C.pink} />
+                          )}
+                        </View>
+
+                        <View style={{ flex: 1, marginRight: 8 }}>
+                          <Text
+                            style={{ color: "#fff", fontWeight: "600", fontSize: 13, marginBottom: 2 }}
+                            numberOfLines={1}
+                          >
+                            {item.name}
+                          </Text>
+                          <Text style={{ color: C.textFaint, fontSize: 11 }}>
+                            {item.assetClass} · {item.units.toFixed(2)} units
+                          </Text>
+                        </View>
+
+                        <View style={{ alignItems: "flex-end", marginRight: 8 }}>
+                          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>
+                            ₹{item.value.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          </Text>
+                          <Text style={{ color: positive ? GREEN : RED, fontSize: 11, fontWeight: "600" }}>
+                            {positive ? "+" : ""}
+                            {item.change}%
+                          </Text>
+                        </View>
+
+                        <ChevronRight size={16} color={C.textFaint} />
+                      </TouchableOpacity>
+                    );
+                  }}
+                  ListEmptyComponent={
+                    <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 40 }}>
+                      <Text style={{ color: C.textMuted, fontSize: 13 }}>
+                        {loading ? "Loading holdings..." : "No holdings in this category."}
+                      </Text>
+                    </View>
+                  }
+                />
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+
+        {/* Bottom Navigation — shared component */}
+        <BottomNav tabs={tabs} paddingBottom={10} />
+      </SafeAreaView>
+    </View>
   );
 }

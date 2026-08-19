@@ -53,3 +53,7 @@ THEME_IMPLEMENTATION.md
 Mentrafi/utils/api.ts
 /utils/api.ts
 Mentrafi/utils/
+
+assets/images
+/.gitignore
+gitignore

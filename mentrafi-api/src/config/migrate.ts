@@ -67,9 +67,14 @@ async function migrate() {
 
   await pool.query(`
     ALTER TABLE personal_information
-    ADD COLUMN IF NOT EXISTS full_name VARCHAR(100)
+    ADD COLUMN IF NOT EXISTS full_name VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS age INTEGER,
+    ADD COLUMN IF NOT EXISTS monthly_sip_budget NUMERIC(12,2),
+    ADD COLUMN IF NOT EXISTS risk_appetite VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS investment_goal TEXT,
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()
   `);
-  console.log("✅ Personal information table extended with full_name");
+  console.log("✅ Personal information table extended with full set of profile fields");
 
   const legacyColumns = await pool.query(`
     SELECT column_name
@@ -232,6 +237,59 @@ async function migrate() {
     CREATE INDEX IF NOT EXISTS idx_user_portfolio_user ON user_portfolio(user_id)
   `);
   console.log("✅ User portfolio indexes created");
+
+  // -------------------------------------------------------------------------
+  // sips — recurring SIP mandates the user has set up for a fund. Drives the
+  // SIP dashboard screen (active/paused lists, progress, next installment).
+  // -------------------------------------------------------------------------
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS sips (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      scheme_code INTEGER NOT NULL REFERENCES funds(scheme_code) ON DELETE CASCADE,
+      monthly_amount NUMERIC(12,2) NOT NULL,
+      installment_day INTEGER NOT NULL DEFAULT 1,
+      total_installments INTEGER NOT NULL DEFAULT 60,
+      completed_installments INTEGER NOT NULL DEFAULT 0,
+      status VARCHAR(20) NOT NULL DEFAULT 'active',
+      start_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      next_installment_date DATE NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  console.log("✅ SIPs table created");
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_sips_user ON sips(user_id)
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_sips_next_installment ON sips(status, next_installment_date)
+  `);
+  console.log("✅ SIPs indexes created");
+
+  // -------------------------------------------------------------------------
+  // sip_installments — log of each executed installment (real purchase),
+  // used to compute a SIP's actual invested amount / current value / returns
+  // instead of estimating them.
+  // -------------------------------------------------------------------------
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS sip_installments (
+      id SERIAL PRIMARY KEY,
+      sip_id INTEGER NOT NULL REFERENCES sips(id) ON DELETE CASCADE,
+      amount NUMERIC(12,2) NOT NULL,
+      nav NUMERIC(12,4) NOT NULL,
+      units NUMERIC(14,4) NOT NULL,
+      installment_date DATE NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  console.log("✅ SIP installments table created");
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_sip_installments_sip ON sip_installments(sip_id, installment_date DESC)
+  `);
+  console.log("✅ SIP installments indexes created");
 
   process.exit(0);
 }

@@ -46,5 +46,8 @@ app-example
 .env.local
 # vscode
 .vscode/
+/uploads
+uploads/
+.gitignore
 
 THEME_IMPLEMENTATION.md

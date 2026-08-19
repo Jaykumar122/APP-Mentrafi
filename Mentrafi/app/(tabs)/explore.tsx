@@ -1,4 +1,5 @@
 import { useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   Home,
   PieChart,
@@ -17,15 +18,14 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "../../context/ThemeContext";
 import { API_URL } from "../../utils/api";
+import BottomNav from "./BottomNav";
+import { AuthBackground, C, depthShadow } from "../(auth)/login";
 
 // ---------------------------------------------------------------------------
-// Brand palette — matches home, ai-advisor & profile screens.
+// Same cosmic dark palette as login, signup, home & profile.
 // ---------------------------------------------------------------------------
-const NAVY = "#12131c";
-const GOLD = "#D4AF37";
-const GREEN = "#22c55e";
+const GREEN = "#4ade80";
 const PAGE_LIMIT = 20;
 
 type Category = "All" | "Equity" | "Debt" | "Hybrid" | "ELSS" | "Gold";
@@ -47,15 +47,9 @@ const CATEGORIES: Category[] = ["All", "Equity", "Debt", "Hybrid", "ELSS", "Gold
 function StarRow({ rating }: { rating: number }) {
   const rounded = Math.round(rating);
   return (
-    <View className="flex-row items-center gap-0.5">
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
       {[1, 2, 3, 4, 5].map((i) => (
-        <Star
-          key={i}
-          size={12}
-          color={GOLD}
-          fill={i <= rounded ? GOLD : "transparent"}
-          strokeWidth={1.5}
-        />
+        <Star key={i} size={12} color={C.pink} fill={i <= rounded ? C.pink : "transparent"} strokeWidth={1.5} />
       ))}
     </View>
   );
@@ -63,72 +57,67 @@ function StarRow({ rating }: { rating: number }) {
 
 // Memoized — only re-renders when this specific fund's own props change,
 // instead of on every parent re-render (search typing, scroll state, etc.)
-const FundCard = memo(function FundCard({
-  fund,
-  cardBg,
-  border,
-  textColor,
-  textSecondary,
-}: {
-  fund: Fund;
-  cardBg: string;
-  border: string;
-  textColor: string;
-  textSecondary: string;
-}) {
+const FundCard = memo(function FundCard({ fund }: { fund: Fund }) {
   return (
     <View
-      style={{ backgroundColor: cardBg, borderColor: border }}
-      className="rounded-2xl border p-4 mb-3"
+      style={{
+        backgroundColor: C.input,
+        borderWidth: 1,
+        borderColor: C.inputBorder,
+        borderRadius: 20,
+        padding: 16,
+        marginBottom: 12,
+      }}
     >
-      <View className="flex-row items-start justify-between mb-3">
-        <View className="flex-1 mr-3">
-          <Text style={{ color: textColor }} className="font-bold text-base mb-0.5">
+      <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12 }}>
+        <View style={{ flex: 1, marginRight: 12 }}>
+          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15, marginBottom: 2 }}>
             {fund.name}
           </Text>
-          <Text style={{ color: textSecondary }} className="text-xs">
+          <Text style={{ color: C.textFaint, fontSize: 12 }}>
             {fund.category} · {fund.subcategory}
           </Text>
         </View>
         <StarRow rating={fund.rating} />
       </View>
 
-      <View className="flex-row items-end justify-between">
-        <View className="flex-row gap-5">
+      <View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" }}>
+        <View style={{ flexDirection: "row", gap: 20 }}>
           <View>
-            <Text style={{ color: textSecondary }} className="text-[11px] mb-1">
-              1Y Return
-            </Text>
-            <Text style={{ color: GREEN }} className="font-semibold text-sm">
+            <Text style={{ color: C.textFaint, fontSize: 11, marginBottom: 4 }}>1Y Return</Text>
+            <Text style={{ color: GREEN, fontWeight: "700", fontSize: 13 }}>
               {fund.oneYearReturn != null ? `+${fund.oneYearReturn}%` : "—"}
             </Text>
           </View>
           <View>
-            <Text style={{ color: textSecondary }} className="text-[11px] mb-1">
-              5Y Return
-            </Text>
+            <Text style={{ color: C.textFaint, fontSize: 11, marginBottom: 4 }}>5Y Return</Text>
             <Text
-              style={{ color: fund.fiveYearReturn != null ? GREEN : textSecondary }}
-              className="font-semibold text-sm"
+              style={{
+                color: fund.fiveYearReturn != null ? GREEN : C.textFaint,
+                fontWeight: "700",
+                fontSize: 13,
+              }}
             >
               {fund.fiveYearReturn != null ? `+${fund.fiveYearReturn}%` : "—"}
             </Text>
           </View>
           <View>
-            <Text style={{ color: textSecondary }} className="text-[11px] mb-1">
-              NAV
-            </Text>
-            <Text style={{ color: textColor }} className="font-semibold text-sm">
+            <Text style={{ color: C.textFaint, fontSize: 11, marginBottom: 4 }}>NAV</Text>
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>
               {fund.nav != null ? `₹${fund.nav.toFixed(2)}` : "—"}
             </Text>
           </View>
         </View>
 
-        <TouchableOpacity
-          style={{ backgroundColor: NAVY }}
-          className="px-4 py-2.5 rounded-full"
-        >
-          <Text className="text-white font-semibold text-xs">Invest</Text>
+        <TouchableOpacity activeOpacity={0.85}>
+          <LinearGradient
+            colors={[C.pink, C.violet]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{ paddingHorizontal: 18, paddingVertical: 9, borderRadius: 999 }}
+          >
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 12 }}>Invest</Text>
+          </LinearGradient>
         </TouchableOpacity>
       </View>
     </View>
@@ -137,7 +126,6 @@ const FundCard = memo(function FundCard({
 
 export default function ExploreScreen() {
   const router = useRouter();
-  const { colors } = useTheme();
   const [activeTab, setActiveTab] = useState("Explore");
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<Category>("All");
@@ -245,149 +233,125 @@ export default function ExploreScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={["top", "bottom"]}>
-      {/* Header */}
-      <View className="px-6 pt-4 pb-4">
-        <Text style={{ color: colors.text }} className="text-3xl font-bold">
-          Explore Funds
-        </Text>
-      </View>
+    <View style={{ flex: 1, backgroundColor: C.bgBottom }}>
+      <AuthBackground />
+      <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
+        {/* Header */}
+        <View style={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16 }}>
+          <Text style={{ color: "#fff", fontSize: 28, fontWeight: "700" }}>Explore Funds</Text>
+        </View>
 
-      {/* Search */}
-      <View className="px-6 mb-4">
-        <View
-          style={{ backgroundColor: colors.cardBg, borderColor: colors.border }}
-          className="flex-row items-center rounded-2xl border px-4 py-3"
-        >
-          <Search size={18} color={colors.textSecondary} />
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search funds, categories..."
-            placeholderTextColor={colors.textSecondary}
-            style={{ color: colors.text, flex: 1, fontSize: 14, marginLeft: 10 }}
+        {/* Search — same glass pill as the login/signup input fields */}
+        <View style={{ paddingHorizontal: 24, marginBottom: 16 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor: C.input,
+              borderWidth: 1,
+              borderColor: C.inputBorder,
+              borderRadius: 16,
+              paddingHorizontal: 16,
+              height: 50,
+            }}
+          >
+            <Search size={18} color={C.textMuted} />
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search funds, categories..."
+              placeholderTextColor={C.textFaint}
+              style={{ color: "#fff", flex: 1, fontSize: 14, marginLeft: 10 }}
+            />
+          </View>
+        </View>
+
+        {/* Category filters */}
+        <View style={{ marginBottom: 16 }}>
+          <FlatList
+            horizontal
+            data={CATEGORIES}
+            keyExtractor={(item) => item}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 24, gap: 8 }}
+            renderItem={({ item }) => {
+              const active = item === category;
+              return (
+                <TouchableOpacity onPress={() => setCategory(item)} activeOpacity={0.85}>
+                  {active ? (
+                    <LinearGradient
+                      colors={[C.pink, C.violet]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={{ paddingHorizontal: 20, paddingVertical: 10, borderRadius: 999 }}
+                    >
+                      <Text style={{ color: "#fff", fontSize: 13, fontWeight: "600" }}>{item}</Text>
+                    </LinearGradient>
+                  ) : (
+                    <View
+                      style={{
+                        backgroundColor: C.input,
+                        borderWidth: 1,
+                        borderColor: C.inputBorder,
+                        paddingHorizontal: 20,
+                        paddingVertical: 10,
+                        borderRadius: 999,
+                      }}
+                    >
+                      <Text style={{ color: C.textMuted, fontSize: 13, fontWeight: "500" }}>{item}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            }}
           />
         </View>
-      </View>
 
-      {/* Category filters */}
-      <View className="mb-4">
-        <FlatList
-          horizontal
-          data={CATEGORIES}
-          keyExtractor={(item) => item}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 24, gap: 8 }}
-          renderItem={({ item }) => {
-            const active = item === category;
-            return (
-              <TouchableOpacity
-                onPress={() => setCategory(item)}
-                style={{
-                  backgroundColor: active ? NAVY : colors.cardBg,
-                  borderColor: active ? NAVY : colors.border,
-                }}
-                className="px-5 py-2.5 rounded-full border"
-              >
-                <Text
-                  style={{ color: active ? "white" : colors.textSecondary }}
-                  className="text-sm font-medium"
-                >
-                  {item}
-                </Text>
-              </TouchableOpacity>
-            );
-          }}
-        />
-      </View>
-
-      {/* Fund list — flex-1 so this fills the space above the tab bar */}
-      <View className="flex-1">
-        {loading && funds.length === 0 ? (
-          <View className="flex-1 items-center justify-center py-16">
-            <ActivityIndicator color={GOLD} />
-          </View>
-        ) : error ? (
-          <View className="flex-1 items-center justify-center py-16 px-6">
-            <Text style={{ color: colors.textSecondary }} className="text-sm text-center">
-              {error}
-            </Text>
-          </View>
-        ) : (
-          <FlatList
-            data={funds}
-            keyExtractor={(item) => item.id}
-            style={{ flex: 1 }}
-            contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 12 }}
-            showsVerticalScrollIndicator={false}
-            onRefresh={() => fetchFunds(1, undefined, true)}
-            refreshing={loading}
-            onEndReached={handleLoadMore}
-            onEndReachedThreshold={0.4}
-            removeClippedSubviews={true}
-            maxToRenderPerBatch={10}
-            windowSize={7}
-            initialNumToRender={10}
-            renderItem={({ item }) => (
-              <FundCard
-                fund={item}
-                cardBg={colors.cardBg}
-                border={colors.border}
-                textColor={colors.text}
-                textSecondary={colors.textSecondary}
-              />
-            )}
-            ListFooterComponent={
-              loadingMore ? (
-                <View className="py-4 items-center">
-                  <ActivityIndicator color={GOLD} size="small" />
+        {/* Fund list — flex-1 so this fills the space above the tab bar */}
+        <View style={{ flex: 1 }}>
+          {loading && funds.length === 0 ? (
+            <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 64 }}>
+              <ActivityIndicator color={C.pink} />
+            </View>
+          ) : error ? (
+            <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 64, paddingHorizontal: 24 }}>
+              <Text style={{ color: C.textMuted, fontSize: 13, textAlign: "center" }}>{error}</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={funds}
+              keyExtractor={(item) => item.id}
+              style={{ flex: 1 }}
+              contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 12 }}
+              showsVerticalScrollIndicator={false}
+              onRefresh={() => fetchFunds(1, undefined, true)}
+              refreshing={loading}
+              onEndReached={handleLoadMore}
+              onEndReachedThreshold={0.4}
+              removeClippedSubviews={true}
+              maxToRenderPerBatch={10}
+              windowSize={7}
+              initialNumToRender={10}
+              renderItem={({ item }) => <FundCard fund={item} />}
+              ListFooterComponent={
+                loadingMore ? (
+                  <View style={{ paddingVertical: 16, alignItems: "center" }}>
+                    <ActivityIndicator color={C.pink} size="small" />
+                  </View>
+                ) : null
+              }
+              ListEmptyComponent={
+                <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: 64 }}>
+                  <Text style={{ color: C.textMuted, fontSize: 13 }}>No funds match your search.</Text>
                 </View>
-              ) : null
-            }
-            ListEmptyComponent={
-              <View className="items-center justify-center py-16">
-                <Text style={{ color: colors.textSecondary }} className="text-sm">
-                  No funds match your search.
-                </Text>
-              </View>
-            }
-          />
-        )}
-      </View>
+              }
+            />
+          )}
+        </View>
 
-      {/* Bottom Navigation */}
-      <View
-        style={{ backgroundColor: colors.cardBg, borderTopColor: colors.divider }}
-        className="flex-row items-center justify-around px-2 pt-2 pb-6 border-t"
-      >
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.name;
-          return (
-            <TouchableOpacity
-              key={tab.name}
-              onPress={() => {
-                setActiveTab(tab.name);
-                if (tab.route) router.push(tab.route as any);
-              }}
-              className="items-center gap-1 flex-1"
-            >
-              <tab.icon size={22} color={isActive ? GOLD : colors.textSecondary} />
-              <Text
-                className="text-[10px]"
-                style={{
-                  color: isActive ? GOLD : colors.textSecondary,
-                  fontWeight: isActive ? "600" : "400",
-                }}
-              >
-                {tab.name}
-              </Text>
-              {isActive && (
-                <View style={{ backgroundColor: GOLD }} className="w-1 h-1 rounded-full mt-0.5" />
-              )}
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    </SafeAreaView>
+        {/* Bottom Navigation — shared component */}
+        <BottomNav tabs={tabs} paddingBottom={10} />
+      </SafeAreaView>
+    </View>
   );
 }

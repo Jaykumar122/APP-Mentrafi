@@ -1,5 +1,5 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useRouter } from "expo-router";
+﻿import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import {
@@ -20,7 +20,7 @@ import {
   Wallet,
   X,
 } from "lucide-react-native";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -50,10 +50,35 @@ const SCREEN_WIDTH = Dimensions.get("window").width;
 const CROP_SIZE = SCREEN_WIDTH - 80; // large, full-screen-style viewfinder
 const GREEN = "#4ade80";
 
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// AVATAR FALLBACK — every user without a custom photo gets a unique
+// initials badge (not the same stock photo). Color is deterministic,
+// derived from the user's name/email, so it stays stable across sessions.
+// ─────────────────────────────────────────────────────────────
+const AVATAR_COLORS = [C.pink, C.violet, C.cyan, "#f59e0b", "#4ade80", "#38bdf8", "#f472b6", "#a78bfa"];
+
+function getInitials(name?: string | null): string {
+  const trimmed = name?.trim();
+  if (!trimmed) return "?";
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function getAvatarColor(seed?: string | null): string {
+  const str = seed?.trim() || "user";
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0; // keep as 32-bit int
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+// ─────────────────────────────────────────────────────────────
 // MINI CUBE — small isometric accent used as a corner watermark on the
 // stat cards, in a per-card accent color
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 function MiniCube({ colorA, colorB }: { colorA: string; colorB: string }) {
   return (
     <Svg width="34" height="34" viewBox="0 0 60 60">
@@ -91,6 +116,10 @@ type ProfileData = {
     dateOfBirth: string | null;
     gender: string | null;
     location: string | null;
+    age: number | null;
+    monthlySipBudget: number | null;
+    riskAppetite: string | null;
+    investmentGoal: string | null;
   };
   stats: {
     portfolioValue: number;
@@ -107,11 +136,15 @@ type PersonalInfoForm = {
   dateOfBirth: string;
   gender: string;
   location: string;
+  age: string;
+  monthlySipBudget: string;
+  riskAppetite: string;
+  investmentGoal: string;
 };
 
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 // SECTION — same glass panel material used across the redesigned app
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <View style={{ marginBottom: 8 }}>
@@ -193,6 +226,8 @@ function MenuRow({ item, last, onPress }: { item: MenuItem; last: boolean; onPre
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ openEditor?: string }>();
+  const hasAutoOpenedEditor = useRef(false);
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -206,6 +241,10 @@ export default function ProfileScreen() {
     dateOfBirth: "",
     gender: "",
     location: "",
+    age: "",
+    monthlySipBudget: "",
+    riskAppetite: "",
+    investmentGoal: "",
   });
 
   const [pendingAvatarSize, setPendingAvatarSize] = useState({ width: 0, height: 0 });
@@ -220,6 +259,15 @@ export default function ProfileScreen() {
     fetchProfile();
   }, []);
 
+  // Coming from profile-setup: automatically open the Personal Information
+  // editor so the user can finish filling in name, phone, DOB, etc.
+  useEffect(() => {
+    if (params.openEditor === "1" && profile && !loading && !hasAutoOpenedEditor.current) {
+      hasAutoOpenedEditor.current = true;
+      openPersonalInfoEditor();
+    }
+  }, [params.openEditor, profile, loading]);
+
   async function fetchProfile() {
     try {
       setLoading(true);
@@ -230,7 +278,10 @@ export default function ProfileScreen() {
       }
 
       const res = await fetch(`${API_URL}/api/profile`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
       });
 
       if (!res.ok) throw new Error("Failed to fetch profile");
@@ -243,6 +294,11 @@ export default function ProfileScreen() {
         dateOfBirth: data.personalInfo?.dateOfBirth ?? "",
         gender: data.personalInfo?.gender ?? "",
         location: data.personalInfo?.location ?? "",
+        age: data.personalInfo?.age != null ? String(data.personalInfo.age) : "",
+        monthlySipBudget:
+          data.personalInfo?.monthlySipBudget != null ? String(data.personalInfo.monthlySipBudget) : "",
+        riskAppetite: data.personalInfo?.riskAppetite ?? "",
+        investmentGoal: data.personalInfo?.investmentGoal ?? "",
       });
     } catch (err) {
       console.error("Profile fetch error:", err);
@@ -258,6 +314,11 @@ export default function ProfileScreen() {
       dateOfBirth: profile?.personalInfo?.dateOfBirth ?? "",
       gender: profile?.personalInfo?.gender ?? "",
       location: profile?.personalInfo?.location ?? "",
+      age: profile?.personalInfo?.age != null ? String(profile.personalInfo.age) : "",
+      monthlySipBudget:
+        profile?.personalInfo?.monthlySipBudget != null ? String(profile.personalInfo.monthlySipBudget) : "",
+      riskAppetite: profile?.personalInfo?.riskAppetite ?? "",
+      investmentGoal: profile?.personalInfo?.investmentGoal ?? "",
     });
     setShowPersonalInfoEditor(true);
   }
@@ -283,6 +344,12 @@ export default function ProfileScreen() {
           dateOfBirth: personalInfoForm.dateOfBirth.trim() || null,
           gender: personalInfoForm.gender.trim() || null,
           location: personalInfoForm.location.trim() || null,
+          age: personalInfoForm.age.trim() ? parseInt(personalInfoForm.age.trim(), 10) : null,
+          monthlySipBudget: personalInfoForm.monthlySipBudget.trim()
+            ? parseFloat(personalInfoForm.monthlySipBudget.trim())
+            : null,
+          riskAppetite: personalInfoForm.riskAppetite.trim() || null,
+          investmentGoal: personalInfoForm.investmentGoal.trim() || null,
         }),
       });
 
@@ -295,12 +362,14 @@ export default function ProfileScreen() {
               ...prev,
               name: data.name ?? prev.name,
               personalInfo: {
-                phone: data.phone ?? prev.personalInfo?.phone ?? null,
-                dateOfBirth: data.date_of_birth
-                  ? new Date(data.date_of_birth).toISOString().slice(0, 10)
-                  : prev.personalInfo?.dateOfBirth ?? null,
-                gender: data.gender ?? prev.personalInfo?.gender ?? null,
-                location: data.location ?? prev.personalInfo?.location ?? null,
+                phone: data.personalInfo?.phone ?? prev.personalInfo?.phone ?? null,
+                dateOfBirth: data.personalInfo?.dateOfBirth ?? prev.personalInfo?.dateOfBirth ?? null,
+                gender: data.personalInfo?.gender ?? prev.personalInfo?.gender ?? null,
+                location: data.personalInfo?.location ?? prev.personalInfo?.location ?? null,
+                age: data.personalInfo?.age ?? prev.personalInfo?.age ?? null,
+                monthlySipBudget: data.personalInfo?.monthlySipBudget ?? prev.personalInfo?.monthlySipBudget ?? null,
+                riskAppetite: data.personalInfo?.riskAppetite ?? prev.personalInfo?.riskAppetite ?? null,
+                investmentGoal: data.personalInfo?.investmentGoal ?? prev.personalInfo?.investmentGoal ?? null,
               },
             }
           : prev
@@ -464,7 +533,9 @@ export default function ProfileScreen() {
 
       const res = await fetch(`${API_URL}/api/profile/avatar`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
         body: formData,
       });
 
@@ -529,7 +600,9 @@ export default function ProfileScreen() {
     ? profile.avatarUrl.startsWith("http")
       ? profile.avatarUrl
       : `${API_URL}${profile.avatarUrl}`
-    : "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=400&h=400&fit=crop&crop=faces";
+    : null;
+  const avatarInitials = getInitials(profile?.name);
+  const avatarColor = getAvatarColor(profile?.email || profile?.name);
 
   const stats = [
     {
@@ -781,11 +854,25 @@ export default function ProfileScreen() {
                     >
                       {uploadingAvatar ? (
                         <ActivityIndicator color={C.pink} />
-                      ) : (
+                      ) : avatarSource ? (
                         <Image
                           source={{ uri: avatarSource }}
                           style={{ width: "100%", height: "100%" }}
                         />
+                      ) : (
+                        <View
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            backgroundColor: avatarColor,
+                          }}
+                        >
+                          <Text style={{ color: "#fff", fontSize: 28, fontWeight: "700" }}>
+                            {avatarInitials}
+                          </Text>
+                        </View>
                       )}
                     </View>
                   </LinearGradient>
@@ -961,6 +1048,20 @@ export default function ProfileScreen() {
                   { label: "Date of Birth", value: profile?.personalInfo?.dateOfBirth ?? "Not added yet" },
                   { label: "Gender", value: profile?.personalInfo?.gender ?? "Not added yet" },
                   { label: "Location", value: profile?.personalInfo?.location ?? "Not added yet" },
+                  {
+                    label: "Age",
+                    value:
+                      profile?.personalInfo?.age != null ? String(profile.personalInfo.age) : "Not added yet",
+                  },
+                  {
+                    label: "Monthly SIP Budget",
+                    value:
+                      profile?.personalInfo?.monthlySipBudget != null
+                        ? `\u20b9${profile.personalInfo.monthlySipBudget}`
+                        : "Not added yet",
+                  },
+                  { label: "Risk Appetite", value: profile?.personalInfo?.riskAppetite ?? "Not added yet" },
+                  { label: "Investment Goal", value: profile?.personalInfo?.investmentGoal ?? "Not added yet" },
                 ].map((field, idx) => (
                   <View
                     key={field.label}
@@ -1228,6 +1329,23 @@ export default function ProfileScreen() {
                     { label: "Date of Birth", key: "dateOfBirth", placeholder: "YYYY-MM-DD" },
                     { label: "Gender", key: "gender", placeholder: "Male / Female / Other" },
                     { label: "Location", key: "location", placeholder: "City or locality" },
+                    { label: "Age", key: "age", placeholder: "Enter your age", keyboardType: "number-pad" as const },
+                    {
+                      label: "Monthly SIP Budget (\u20b9)",
+                      key: "monthlySipBudget",
+                      placeholder: "e.g. 5000",
+                      keyboardType: "decimal-pad" as const,
+                    },
+                    {
+                      label: "Risk Appetite",
+                      key: "riskAppetite",
+                      placeholder: "Low / Medium / High",
+                    },
+                    {
+                      label: "Investment Goal",
+                      key: "investmentGoal",
+                      placeholder: "e.g. Retirement planning, 10 years",
+                    },
                   ].map((field) => (
                     <View key={field.key} style={{ gap: 6 }}>
                       <Text style={{ color: C.textMuted, fontSize: 12, fontWeight: "700" }}>
@@ -1240,6 +1358,7 @@ export default function ProfileScreen() {
                         }
                         placeholder={field.placeholder}
                         placeholderTextColor={C.textFaint}
+                        keyboardType={(field as any).keyboardType ?? "default"}
                         style={{
                           backgroundColor: C.input,
                           borderRadius: 16,

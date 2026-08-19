@@ -1,373 +1,368 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { router } from "expo-router";
-import { Eye, EyeOff, TrendingUp } from "lucide-react-native";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+import { AlertCircle, ArrowRight, Eye, EyeOff, Lock, Mail } from "lucide-react-native";
+import Svg, {
+  Circle,
+  Defs,
+  Ellipse,
+  LinearGradient as SvgGrad,
+  Path,
+  RadialGradient,
+  Stop,
+} from "react-native-svg";
+import { useState } from "react";
 import {
-  Animated,
-  Easing,
+  ActivityIndicator,
+  Dimensions,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  StatusBar,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import Svg, { Path } from "react-native-svg";
 import { API_URL } from "../../utils/api";
-import { AnimatedTabToggle } from "../../components/AnimatedTabToggle";
 
-const C = {
-  background: "#0d1b2a",
-  accent: "#b8943a",
-  accentGlow: "rgba(184,148,58,0.15)",
-  surface: "#f5f6f8",
-  bodyBg: "#f0f1f3",
-  textPrimary: "#0d1b2a",
-  textMuted: "#6b7280",
-  border: "rgba(13,27,42,0.1)",
-  white40: "rgba(255,255,255,0.40)",
-  white55: "rgba(255,255,255,0.55)",
-  white18: "rgba(255,255,255,0.18)",
-  error: "#dc2626",
-  errorBg: "#fee2e2",
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const CARD_WIDTH = SCREEN_WIDTH - 44;
+
+// ─────────────────────────────────────────────
+// COLORS — shared palette, kept identical across login & signup
+// ─────────────────────────────────────────────
+export const C = {
+  bgTop: "#1c1547",
+  bgMid: "#120c33",
+  bgBottom: "#050310",
+  card: "#0a0a14",
+  cardEdge: "rgba(255,255,255,0.06)",
+  input: "rgba(255,255,255,0.05)",
+  inputBorder: "rgba(255,255,255,0.09)",
+  pink: "#ff4f81",
+  magenta: "#c239b3",
+  violet: "#7b3ff2",
+  cyan: "#33d9e8",
+  textMuted: "rgba(255,255,255,0.45)",
+  textFaint: "rgba(255,255,255,0.28)",
 };
 
-const titleFont = Platform.select({ ios: "Georgia", android: "serif", default: undefined });
+export const depthShadow = (level: "sm" | "md" | "lg" = "md") => {
+  const map = {
+    sm: { h: 4, r: 10, op: 0.3, elev: 5 },
+    md: { h: 12, r: 24, op: 0.4, elev: 12 },
+    lg: { h: 26, r: 44, op: 0.55, elev: 22 },
+  }[level];
+  return {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: map.h },
+    shadowRadius: map.r,
+    shadowOpacity: map.op,
+    elevation: map.elev,
+  };
+};
 
-function GoogleIcon() {
+export const cardTilt = {
+  transform: [
+    { perspective: 1100 },
+    { rotateX: "3.5deg" as const },
+    { rotateY: "-3deg" as const },
+  ],
+};
+
+// ─────────────────────────────────────────────
+// GLOW BACKDROP — radial light-blob behind the hero icon
+// ─────────────────────────────────────────────
+export function GlowBackdrop({ from, to }: { from: string; to: string }) {
   return (
-    <Svg width={18} height={18} viewBox="0 0 24 24">
-      <Path
-        fill="#4285F4"
-        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-      />
-      <Path
-        fill="#34A853"
-        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-      />
-      <Path
-        fill="#FBBC05"
-        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-      />
-      <Path
-        fill="#EA4335"
-        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-      />
+    <Svg width={CARD_WIDTH} height={190} viewBox="0 0 300 190">
+      <Defs>
+        <RadialGradient id="glowA" cx="50%" cy="72%" r="60%">
+          <Stop offset="0%" stopColor={from} stopOpacity="0.9" />
+          <Stop offset="55%" stopColor={to} stopOpacity="0.35" />
+          <Stop offset="100%" stopColor={to} stopOpacity="0" />
+        </RadialGradient>
+        <RadialGradient id="glowB" cx="50%" cy="80%" r="38%">
+          <Stop offset="0%" stopColor="#fff" stopOpacity="0.5" />
+          <Stop offset="100%" stopColor="#fff" stopOpacity="0" />
+        </RadialGradient>
+      </Defs>
+      <Ellipse cx="150" cy="130" rx="140" ry="80" fill="url(#glowA)" />
+      <Ellipse cx="150" cy="142" rx="64" ry="28" fill="url(#glowB)" />
+      <Ellipse cx="150" cy="168" rx="42" ry="8" fill="#000" opacity="0.4" />
     </Svg>
   );
 }
 
-function AppleIcon() {
+// ─────────────────────────────────────────────
+// LOCK ICON — isometric extruded lock (login hero)
+// ─────────────────────────────────────────────
+export function LockIcon() {
   return (
-    <Svg width={18} height={18} viewBox="0 0 24 24" fill={C.textPrimary}>
-      <Path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
+    <Svg width="130" height="130" viewBox="0 0 150 150">
+      <Defs>
+        <SvgGrad id="lkBody" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0%" stopColor="#ff9dbc" />
+          <Stop offset="100%" stopColor={C.pink} />
+        </SvgGrad>
+        <SvgGrad id="lkBodySide" x1="0" y1="0" x2="1" y2="0">
+          <Stop offset="0%" stopColor="#b23360" />
+          <Stop offset="100%" stopColor="#7a1f42" />
+        </SvgGrad>
+        <SvgGrad id="lkTop" x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
+          <Stop offset="100%" stopColor="#ffffff" stopOpacity="0.55" />
+        </SvgGrad>
+        <SvgGrad id="lkShackle" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0%" stopColor="#c9b3ff" />
+          <Stop offset="100%" stopColor={C.violet} />
+        </SvgGrad>
+      </Defs>
+
+      <Path
+        d="M50 62 V46 a25 25 0 0 1 50 0 V62"
+        stroke="#4c2794"
+        strokeWidth="18"
+        fill="none"
+        strokeLinecap="round"
+        opacity="0.55"
+      />
+      <Path
+        d="M50 60 V46 a25 25 0 0 1 50 0 V60"
+        stroke="url(#lkShackle)"
+        strokeWidth="14"
+        fill="none"
+        strokeLinecap="round"
+      />
+
+      <Path d="M112,64 L112,116 L124,109 L124,57 Z" fill="url(#lkBodySide)" />
+      <Path d="M28,64 L112,64 L124,57 L40,57 Z" fill="url(#lkTop)" />
+      <Path d="M28,64 L28,116 L112,116 L112,64 Z" fill="url(#lkBody)" />
+
+      <Circle cx="70" cy="84" r="7" fill="#3d1140" />
+      <Path d="M67 89 L73 89 L76 102 L64 102 Z" fill="#3d1140" />
+
+      <Path d="M32 66 L60 66 L54 60 L38 60 Z" fill="#fff" opacity="0.35" />
     </Svg>
   );
 }
 
-function BrandLogo() {
+// ─────────────────────────────────────────────
+// Floating background sphere — parallax cue
+// ─────────────────────────────────────────────
+export function FloatingSphere({
+  size,
+  top,
+  left,
+  right,
+  color,
+  opacity = 0.5,
+}: {
+  size: number;
+  top: number;
+  left?: number;
+  right?: number;
+  color: string;
+  opacity?: number;
+}) {
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-      <View
-        style={{
-          width: 28,
-          height: 28,
-          borderRadius: 14,
-          borderWidth: 1.5,
-          borderColor: C.accent,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: "rgba(184,148,58,0.08)",
-        }}
-      >
-        <View
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: 4,
-            borderWidth: 1.5,
-            borderColor: C.accent,
-          }}
-        />
-      </View>
-      <Text
-        style={{
-          color: "#fff",
-          fontSize: 18,
-          fontWeight: "600",
-          fontFamily: titleFont,
-        }}
-      >
-        Mentrafi
-      </Text>
+    <View pointerEvents="none" style={{ position: "absolute", top, left, right, opacity }}>
+      <Svg width={size} height={size} viewBox="0 0 100 100">
+        <Defs>
+          <RadialGradient id={`sph-${size}-${top}`} cx="35%" cy="30%" r="75%">
+            <Stop offset="0%" stopColor="#fff" stopOpacity="0.9" />
+            <Stop offset="35%" stopColor={color} stopOpacity="0.85" />
+            <Stop offset="100%" stopColor={color} stopOpacity="0.05" />
+          </RadialGradient>
+        </Defs>
+        <Circle cx="50" cy="50" r="46" fill={`url(#sph-${size}-${top})`} />
+      </Svg>
     </View>
   );
 }
 
-function Decorations() {
+// ─────────────────────────────────────────────
+// BACKGROUND — shared gradient + glows + spheres, used by both screens
+// ─────────────────────────────────────────────
+export function AuthBackground() {
   return (
     <>
+      <LinearGradient
+        colors={[C.bgTop, C.bgMid, C.bgBottom]}
+        start={{ x: 0.15, y: 0 }}
+        end={{ x: 0.85, y: 1 }}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+      />
       <View
         pointerEvents="none"
         style={{
           position: "absolute",
-          top: -72,
-          right: -72,
-          width: 280,
-          height: 280,
-          borderRadius: 140,
-          backgroundColor: C.accentGlow,
+          top: -120,
+          left: -100,
+          width: 300,
+          height: 300,
+          borderRadius: 150,
+          backgroundColor: "rgba(123,63,242,0.18)",
         }}
       />
       <View
         pointerEvents="none"
         style={{
           position: "absolute",
-          top: -20,
-          right: -22,
-          width: 174,
-          height: 174,
-          borderRadius: 87,
-          backgroundColor: C.accent,
-          opacity: 0.96,
+          bottom: -140,
+          right: -100,
+          width: 300,
+          height: 300,
+          borderRadius: 150,
+          backgroundColor: "rgba(51,217,232,0.10)",
         }}
       />
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          top: 82,
-          right: 18,
-          zIndex: 5,
-          backgroundColor: "rgba(255,255,255,0.18)",
-          borderRadius: 16,
-          paddingHorizontal: 12,
-          paddingVertical: 9,
-          borderWidth: 1,
-          borderColor: "rgba(255,255,255,0.24)",
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 8,
-        }}
-      >
-        <View
-          style={{
-            width: 24,
-            height: 24,
-            borderRadius: 12,
-            backgroundColor: "rgba(255,255,255,0.20)",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <TrendingUp size={12} color="#fff" />
-        </View>
-        <View>
-          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>
-            +26.2%
-          </Text>
-          <Text style={{ color: "rgba(255,255,255,0.68)", fontSize: 9 }}>
-            1Y Return
-          </Text>
-        </View>
-      </View>
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          top: 214,
-          right: -72,
-          width: 188,
-          height: 188,
-          borderRadius: 94,
-          backgroundColor: "rgba(255,255,255,0.03)",
-          borderWidth: 1,
-          borderColor: "rgba(255,255,255,0.07)",
-        }}
-      />
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          top: 156,
-          left: 46,
-          width: 12,
-          height: 12,
-          borderRadius: 6,
-          backgroundColor: C.accent,
-          opacity: 0.9,
-        }}
-      />
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          bottom: 220,
-          left: -52,
-          width: 164,
-          height: 164,
-          borderRadius: 82,
-          borderWidth: 1,
-          borderColor: "rgba(184,148,58,0.09)",
-          backgroundColor: "rgba(184,148,58,0.02)",
-        }}
-      />
+      <FloatingSphere size={60} top={80} left={18} color={C.violet} opacity={0.4} />
+      <FloatingSphere size={40} top={SCREEN_HEIGHT * 0.7} right={26} color={C.cyan} opacity={0.35} />
+      <FloatingSphere size={26} top={130} right={36} color={C.pink} opacity={0.3} />
     </>
   );
 }
 
-type FieldProps = {
-  label: string;
-  value: string;
-  onChangeText: (text: string) => void;
-  placeholder: string;
-  secureTextEntry?: boolean;
-  keyboardType?: "default" | "email-address";
-  autoCapitalize?: "none" | "words" | "sentences";
-  rightElement?: ReactNode;
-  error?: string;
-};
-
-function Field({
-  label,
+// ─────────────────────────────────────────────
+// INPUT FIELD — dark glass pill matching the card's material
+// ─────────────────────────────────────────────
+export function FieldInput({
+  icon,
+  placeholder,
   value,
   onChangeText,
-  placeholder,
-  secureTextEntry = false,
-  keyboardType = "default",
-  autoCapitalize = "sentences",
-  rightElement,
-  error,
-}: FieldProps) {
+  secure,
+  toggleSecure,
+  keyboardType,
+  autoCapitalize,
+}: {
+  icon: JSX.Element;
+  placeholder: string;
+  value: string;
+  onChangeText: (v: string) => void;
+  secure?: boolean;
+  toggleSecure?: () => void;
+  keyboardType?: "default" | "email-address";
+  autoCapitalize?: "none" | "words" | "sentences" | "characters";
+}) {
   return (
-    <View style={{ marginBottom: 18 }}>
-      <Text
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: C.input,
+        borderWidth: 1,
+        borderColor: C.inputBorder,
+        borderRadius: 16,
+        paddingHorizontal: 16,
+        height: 54,
+        marginBottom: 14,
+      }}
+    >
+      {icon}
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={C.textFaint}
+        secureTextEntry={secure}
+        autoCapitalize={autoCapitalize ?? "none"}
+        keyboardType={keyboardType || "default"}
         style={{
-          fontSize: 12,
-          fontWeight: "600",
-          color: C.textMuted,
-          marginBottom: 8,
+          flex: 1,
+          marginLeft: 12,
+          color: "#fff",
+          fontSize: 14,
         }}
-      >
-        {label}
-      </Text>
-      <View
-        style={{
-          minHeight: 44,
-          borderRadius: 16,
-          borderWidth: 1,
-          borderColor: error ? C.error : C.border,
-          backgroundColor: C.bodyBg,
-          paddingHorizontal: 16,
-          flexDirection: "row",
-          alignItems: "center",
-        }}
-      >
-        <TextInput
-          value={value}
-          onChangeText={onChangeText}
-          placeholder={placeholder}
-          placeholderTextColor="#8b94a3"
-          secureTextEntry={secureTextEntry}
-          keyboardType={keyboardType}
-          autoCapitalize={autoCapitalize}
-          style={{
-            flex: 1,
-            paddingVertical: Platform.OS === "ios" ? 15 : 12,
-            fontSize: 14,
-            color: C.textPrimary,
-          }}
-        />
-        {rightElement}
-      </View>
-      {error ? (
-        <Text style={{ color: C.error, fontSize: 11, marginTop: 5, marginLeft: 2 }}>
-          {error}
-        </Text>
-      ) : null}
+      />
+      {toggleSecure && (
+        <TouchableOpacity onPress={toggleSecure} activeOpacity={0.7}>
+          {secure ? (
+            <Eye size={18} color={C.textMuted} />
+          ) : (
+            <EyeOff size={18} color={C.textMuted} />
+          )}
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
 
+// ─────────────────────────────────────────────
+// ERROR BANNER — shared between login & signup
+// ─────────────────────────────────────────────
+export function ErrorBanner({ message }: { message: string }) {
+  if (!message) return null;
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "rgba(255,79,129,0.1)",
+        borderWidth: 1,
+        borderColor: "rgba(255,79,129,0.3)",
+        borderRadius: 14,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        marginBottom: 14,
+        gap: 8,
+      }}
+    >
+      <AlertCircle size={15} color={C.pink} />
+      <Text style={{ color: C.pink, fontSize: 12, flex: 1 }}>{message}</Text>
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────
+// LOGIN SCREEN
+// ─────────────────────────────────────────────
 export default function LoginScreen() {
-  const activeTab = "login";
-  const [identifier, setIdentifier] = useState("");
+  const router = useRouter();
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  const [hidePassword, setHidePassword] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const headerAnim = useRef(new Animated.Value(0)).current;
-  const cardAnim = useRef(new Animated.Value(0)).current;
-  const footerAnim = useRef(new Animated.Value(0)).current;
+  const [error, setError] = useState("");
 
-  const isValid = useMemo(() => {
-    return identifier.trim().length > 0 && password.length >= 6;
-  }, [identifier, password]);
-
-  useEffect(() => {
-    headerAnim.setValue(0);
-    cardAnim.setValue(0);
-    footerAnim.setValue(0);
-
-    Animated.stagger(90, [
-      Animated.timing(headerAnim, {
-        toValue: 1,
-        duration: 360,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(cardAnim, {
-        toValue: 1,
-        duration: 420,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(footerAnim, {
-        toValue: 1,
-        duration: 320,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [cardAnim, footerAnim, headerAnim]);
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const phoneRegex = /^[0-9]{10,}$/;
 
   const validate = () => {
-    const nextErrors: Record<string, string> = {};
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const phoneRegex = /^[0-9]{10,}$/;
-
-    if (!identifier.trim()) {
-      nextErrors.identifier = "Mobile or email is required";
-    } else if (
-      !emailRegex.test(identifier.trim()) &&
-      !phoneRegex.test(identifier.trim())
-    ) {
-      nextErrors.identifier = "Enter a valid mobile number or email";
+    const identifier = email.trim();
+    if (!identifier) {
+      setError("Please enter your mobile number or email.");
+      return false;
     }
-
-    if (!password.trim()) {
-      nextErrors.password = "Password is required";
-    } else if (password.length < 6) {
-      nextErrors.password = "Password must be at least 6 characters";
+    if (!emailRegex.test(identifier) && !phoneRegex.test(identifier)) {
+      setError("Enter a valid mobile number or email.");
+      return false;
     }
-
-    setErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
+    if (!password) {
+      setError("Please enter your password.");
+      return false;
+    }
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return false;
+    }
+    return true;
   };
 
-  const handleSubmit = async () => {
+  async function handleLogin() {
+    setError("");
     if (!validate()) return;
 
     setLoading(true);
     try {
+      // Talk to the backend directly with API_URL — utils/api.ts only
+      // exports the base URL, so the fetch + session storage lives here.
       const res = await fetch(`${API_URL}/api/auth/signin`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: identifier.trim(),
+          email: email.trim(),
           password,
         }),
       });
@@ -375,7 +370,7 @@ export default function LoginScreen() {
       const data = await res.json();
 
       if (!res.ok) {
-        setErrors({ form: data.error || "Login failed" });
+        setError(data.error || "Couldn't log in. Please try again.");
         setLoading(false);
         return;
       }
@@ -386,292 +381,226 @@ export default function LoginScreen() {
       }
       router.replace("/(tabs)/home");
     } catch {
-      setErrors({ form: "Network error. Check your connection." });
+      setError("Network error. Check your connection.");
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   return (
-    <View style={{ flex: 1, backgroundColor: C.background }}>
-      <StatusBar barStyle="light-content" backgroundColor={C.background} />
-      <SafeAreaView style={{ flex: 1 }}>
-        <Decorations />
+    <View style={{ flex: 1, backgroundColor: C.bgBottom }}>
+      <AuthBackground />
 
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={{ flex: 1 }}
+      >
+        <ScrollView
+          contentContainerStyle={{
+            flexGrow: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            paddingVertical: 40,
+          }}
+          keyboardShouldPersistTaps="handled"
         >
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingBottom: 34 }}
+          <View
+            style={{
+              width: CARD_WIDTH,
+              ...depthShadow("lg"),
+              ...cardTilt,
+            }}
           >
-            <Animated.View
+            <LinearGradient
+              colors={[C.card, "#050508"]}
+              start={{ x: 0.2, y: 0 }}
+              end={{ x: 0.8, y: 1 }}
               style={{
-                paddingHorizontal: 24,
-                paddingTop: 32,
-                paddingBottom: 26,
-                opacity: headerAnim,
-                transform: [
-                  {
-                    translateY: headerAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [18, 0],
-                    }),
-                  },
-                ],
-              }}
-            >
-              <View style={{ marginBottom: 36 }}>
-                <BrandLogo />
-              </View>
-
-              <Text
-                style={{
-                  color: "#fff",
-                  fontSize: 40,
-                  lineHeight: 44,
-                  fontWeight: "700",
-                  fontFamily: titleFont,
-                  marginBottom: 10,
-                  maxWidth: 250,
-                }}
-              >
-                {"Welcome\nback."}
-              </Text>
-
-              <Text style={{ color: C.white40, fontSize: 15, lineHeight: 21 }}>
-                Sign in to access your portfolio.
-              </Text>
-            </Animated.View>
-
-            <Animated.View
-              style={{
-                paddingHorizontal: 16,
-                opacity: cardAnim,
-                transform: [
-                  {
-                    translateY: cardAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [28, 0],
-                    }),
-                  },
-                  {
-                    scale: cardAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.985, 1],
-                    }),
-                  },
-                ],
+                borderRadius: 36,
+                borderWidth: 1,
+                borderColor: C.cardEdge,
+                overflow: "hidden",
+                paddingBottom: 30,
               }}
             >
               <View
+                pointerEvents="none"
                 style={{
-                  backgroundColor: C.surface,
-                  borderRadius: 30,
-                  padding: 20,
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 16 },
-                  shadowOpacity: 0.22,
-                  shadowRadius: 24,
-                  elevation: 14,
+                  position: "absolute",
+                  top: -40,
+                  left: -60,
+                  width: 140,
+                  height: 700,
+                  backgroundColor: "rgba(255,255,255,0.05)",
+                  transform: [{ rotate: "18deg" }],
                 }}
-              >
-                <AnimatedTabToggle activeTab={activeTab} />
+              />
 
-                {errors.form ? (
-                  <View
-                    style={{
-                      backgroundColor: C.errorBg,
-                      borderRadius: 12,
-                      paddingHorizontal: 12,
-                      paddingVertical: 10,
-                      marginBottom: 16,
-                    }}
-                  >
-                    <Text style={{ color: C.error, fontSize: 13 }}>{errors.form}</Text>
-                  </View>
-                ) : null}
+              <View style={{ height: 190, alignItems: "center", justifyContent: "flex-end" }}>
+                <View style={{ position: "absolute", bottom: 0 }}>
+                  <GlowBackdrop from={C.pink} to={C.violet} />
+                </View>
+                <View style={{ marginBottom: 26, ...depthShadow("md") }}>
+                  <LockIcon />
+                </View>
+              </View>
 
-                <Field
-                  label="Email"
-                  value={identifier}
-                  onChangeText={(text) => {
-                    setIdentifier(text);
-                    if (errors.identifier || errors.form) {
-                      setErrors((prev) => ({ ...prev, identifier: "", form: "" }));
-                    }
+              <View style={{ paddingHorizontal: 26 }}>
+                <Text
+                  style={{
+                    color: C.pink,
+                    fontSize: 10,
+                    fontWeight: "700",
+                    letterSpacing: 1.2,
+                    marginBottom: 10,
+                    textAlign: "center",
                   }}
-                  placeholder="91 or you@email.com"
+                >
+                  WELCOME BACK
+                </Text>
+                <Text
+                  style={{
+                    color: "#fff",
+                    fontSize: 23,
+                    lineHeight: 29,
+                    fontWeight: "700",
+                    marginBottom: 6,
+                    textAlign: "center",
+                  }}
+                >
+                  Log in to your account
+                </Text>
+                <Text
+                  style={{
+                    color: C.textMuted,
+                    fontSize: 12.5,
+                    lineHeight: 19,
+                    textAlign: "center",
+                    marginBottom: 26,
+                  }}
+                >
+                  Pick up right where you left off with your investments.
+                </Text>
+
+                <ErrorBanner message={error} />
+
+                <FieldInput
+                  icon={<Mail size={18} color={C.textMuted} />}
+                  placeholder="Mobile / Email"
+                  value={email}
+                  onChangeText={setEmail}
                   keyboardType="email-address"
-                  autoCapitalize="none"
-                  error={errors.identifier}
                 />
-
-                <Field
-                  label="Password"
+                <FieldInput
+                  icon={<Lock size={18} color={C.textMuted} />}
+                  placeholder="Password"
                   value={password}
-                  onChangeText={(text) => {
-                    setPassword(text);
-                    if (errors.password || errors.form) {
-                      setErrors((prev) => ({ ...prev, password: "", form: "" }));
-                    }
-                  }}
-                  placeholder="••••••••"
-                  secureTextEntry={!showPassword}
-                  error={errors.password}
-                  rightElement={
-                    <TouchableOpacity
-                      onPress={() => setShowPassword((prev) => !prev)}
-                      activeOpacity={0.7}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      {showPassword ? (
-                        <EyeOff size={18} color="#94a3b8" />
-                      ) : (
-                        <Eye size={18} color="#94a3b8" />
-                      )}
-                    </TouchableOpacity>
-                  }
+                  onChangeText={setPassword}
+                  secure={hidePassword}
+                  toggleSecure={() => setHidePassword((v) => !v)}
                 />
 
                 <TouchableOpacity
-                  onPress={() => router.push("/(auth)/forgot-password")}
                   activeOpacity={0.7}
-                  style={{ alignSelf: "flex-end", marginTop: -2, marginBottom: 20 }}
+                  style={{ alignSelf: "flex-end", marginBottom: 22 }}
+                  onPress={() => router.push("/(auth)/forgot-password")}
                 >
-                  <Text style={{ color: C.accent, fontSize: 13, fontWeight: "600" }}>
+                  <Text style={{ color: C.cyan, fontSize: 12, fontWeight: "600" }}>
                     Forgot password?
                   </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  onPress={handleSubmit}
-                  activeOpacity={isValid && !loading ? 0.88 : 1}
-                  disabled={!isValid || loading}
-                  style={{ marginBottom: 20 }}
+                  onPress={handleLogin}
+                  activeOpacity={0.88}
+                  disabled={loading}
+                  style={{ ...depthShadow("md"), opacity: loading ? 0.75 : 1 }}
                 >
-                  <View
+                  <LinearGradient
+                    colors={[C.pink, C.violet]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
                     style={{
-                      backgroundColor: isValid ? C.background : "rgba(13,27,42,0.35)",
-                      borderRadius: 16,
-                      paddingVertical: 16,
-                      flexDirection: "row",
+                      height: 54,
+                      borderRadius: 27,
                       alignItems: "center",
                       justifyContent: "center",
+                      flexDirection: "row",
                       gap: 8,
                     }}
                   >
-                    <Text style={{ color: "#fff", fontSize: 15, fontWeight: "700" }}>
-                      {loading ? "Signing in..." : "Sign in securely"}
-                    </Text>
-                    {!loading ? (
-                      <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700" }}>›</Text>
-                    ) : null}
-                  </View>
+                    {loading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <>
+                        <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>
+                          Log In
+                        </Text>
+                        <ArrowRight size={17} color="#fff" />
+                      </>
+                    )}
+                  </LinearGradient>
                 </TouchableOpacity>
 
-                <View
+                <View style={{ flexDirection: "row", alignItems: "center", marginVertical: 22 }}>
+                  <View style={{ flex: 1, height: 1, backgroundColor: "rgba(255,255,255,0.08)" }} />
+                  <Text style={{ color: C.textFaint, fontSize: 11, marginHorizontal: 10 }}>
+                    OR CONTINUE WITH
+                  </Text>
+                  <View style={{ flex: 1, height: 1, backgroundColor: "rgba(255,255,255,0.08)" }} />
+                </View>
+
+                <View style={{ flexDirection: "row", gap: 12, marginBottom: 22 }}>
+                  {["Google", "Apple"].map((label) => (
+                    <TouchableOpacity
+                      key={label}
+                      activeOpacity={0.8}
+                      style={{
+                        flex: 1,
+                        height: 48,
+                        borderRadius: 16,
+                        borderWidth: 1,
+                        borderColor: C.inputBorder,
+                        backgroundColor: C.input,
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Text style={{ color: "#fff", fontSize: 13, fontWeight: "600" }}>
+                        {label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <View style={{ flexDirection: "row", justifyContent: "center" }}>
+                  <Text style={{ color: C.textMuted, fontSize: 12.5 }}>
+                    Don&apos;t have an account?{" "}
+                  </Text>
+                  <TouchableOpacity activeOpacity={0.7} onPress={() => router.push("/(auth)/signup")}>
+                    <Text style={{ color: C.cyan, fontSize: 12.5, fontWeight: "700" }}>
+                      Sign up
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <Text
                   style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 12,
-                    marginBottom: 20,
+                    marginTop: 18,
+                    textAlign: "center",
+                    color: C.textFaint,
+                    fontSize: 10,
+                    lineHeight: 15,
                   }}
                 >
-                  <View style={{ flex: 1, height: 1, backgroundColor: C.border }} />
-                  <Text style={{ color: C.textMuted, fontSize: 12 }}>or continue with</Text>
-                  <View style={{ flex: 1, height: 1, backgroundColor: C.border }} />
-                </View>
-
-                <View style={{ flexDirection: "row", gap: 12 }}>
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    style={{
-                      flex: 1,
-                      minHeight: 44,
-                      borderRadius: 16,
-                      borderWidth: 1,
-                      borderColor: C.border,
-                      backgroundColor: "#fff",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexDirection: "row",
-                      gap: 8,
-                    }}
-                  >
-                    <GoogleIcon />
-                    <Text style={{ color: C.textPrimary, fontSize: 14, fontWeight: "500" }}>
-                      Google
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    style={{
-                      flex: 1,
-                      minHeight: 44,
-                      borderRadius: 16,
-                      borderWidth: 1,
-                      borderColor: C.border,
-                      backgroundColor: "#fff",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexDirection: "row",
-                      gap: 8,
-                    }}
-                  >
-                    <AppleIcon />
-                    <Text style={{ color: C.textPrimary, fontSize: 14, fontWeight: "500" }}>
-                      Apple
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </Animated.View>
-
-            <Animated.View
-              style={{
-                alignItems: "center",
-                marginTop: 18,
-                paddingHorizontal: 24,
-                opacity: footerAnim,
-                transform: [
-                  {
-                    translateY: footerAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [14, 0],
-                    }),
-                  },
-                ],
-              }}
-            >
-              <TouchableOpacity
-                onPress={() => router.replace("/(auth)/signup")}
-                activeOpacity={0.7}
-              >
-                <Text style={{ color: C.white55, fontSize: 13 }}>
-                  New to Mentrafi? <Text style={{ color: C.accent, fontWeight: "700" }}>Create account</Text>
+                  SEBI Reg. No. MF/021/05 · Investments subject to market risks. Please read all
+                  scheme documents carefully.
                 </Text>
-              </TouchableOpacity>
-
-              <Text
-                style={{
-                  marginTop: 14,
-                  textAlign: "center",
-                  color: C.white18,
-                  fontSize: 10,
-                  lineHeight: 15,
-                }}
-              >
-                SEBI Reg. No. MF/021/05 · Investments subject to market risks. Please read all
-                scheme documents carefully.
-              </Text>
-            </Animated.View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
+              </View>
+            </LinearGradient>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }

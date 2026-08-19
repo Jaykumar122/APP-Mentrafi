@@ -1,827 +1,1093 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { router } from "expo-router";
-import {
-  ArrowRight,
-  ChevronRight,
-  RefreshCw,
-  Sparkles,
-} from "lucide-react-native";
-import Svg, { Path } from "react-native-svg";
-import { useRef, useState } from "react";
+import { useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+import { ArrowRight, Check } from "lucide-react-native";
+
+import Svg, {
+  Circle,
+  Defs,
+  Ellipse,
+  LinearGradient as SvgGrad,
+  Path,
+  RadialGradient,
+  Stop,
+} from "react-native-svg";
+import { Fragment, useRef, useState, type ReactElement } from "react";
 import {
   Dimensions,
   FlatList,
   Platform,
-  ScrollView,
-  StatusBar,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+
+const CARD_WIDTH = SCREEN_WIDTH - 44;
+const CARD_HEIGHT = Math.min(SCREEN_HEIGHT * 0.66, 560);
 
 // ─────────────────────────────────────────────
 // COLORS
 // ─────────────────────────────────────────────
+
 const C = {
-  navy: "#0d1b2a",
-  gold: "#b8943a",
-  goldFaint: "rgba(184,148,58,0.14)",
-  white06: "rgba(255,255,255,0.06)",
-  white08: "rgba(255,255,255,0.08)",
-  white10: "rgba(255,255,255,0.10)",
-  white20: "rgba(255,255,255,0.20)",
-  white30: "rgba(255,255,255,0.30)",
-  white40: "rgba(255,255,255,0.40)",
-  white42: "rgba(255,255,255,0.42)",
-  white60: "rgba(255,255,255,0.60)",
-  green: "#22c55e",
+  bgTop: "#1c1547",
+  bgMid: "#120c33",
+  bgBottom: "#050310",
+  card: "#0a0a14",
+  cardEdge: "rgba(255,255,255,0.06)",
+  pink: "#ff4f81",
+  magenta: "#c239b3",
+  violet: "#7b3ff2",
+  cyan: "#33d9e8",
+  textMuted: "rgba(255,255,255,0.45)",
+  textFaint: "rgba(255,255,255,0.28)",
 };
 
-const titleFont = Platform.select({
-  ios: "Georgia",
-  android: "serif",
-  default: undefined,
-});
+// ─────────────────────────────────────────────
+// SHADOW
+// ─────────────────────────────────────────────
+
+const depthShadow = (level: "sm" | "md" | "lg" = "md") => {
+  const map = {
+    sm: { h: 4, r: 10, op: 0.3, elev: 5 },
+    md: { h: 12, r: 24, op: 0.4, elev: 12 },
+    lg: { h: 26, r: 44, op: 0.55, elev: 22 },
+  }[level];
+
+  return {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: map.h },
+    shadowRadius: map.r,
+    shadowOpacity: map.op,
+    elevation: map.elev,
+  };
+};
 
 // ─────────────────────────────────────────────
-// SLIDE DATA
+// CARD TILT
 // ─────────────────────────────────────────────
+
+const cardTilt = {
+  transform: [
+    { perspective: 1100 },
+    { rotateX: "3.5deg" as const },
+    { rotateY: "-3deg" as const },
+  ],
+};
+
+// ─────────────────────────────────────────────
+// SLIDES
+// ─────────────────────────────────────────────
+
 const SLIDES = [
   {
     id: "1",
     tag: "SMART INVESTING",
-    headline: "Grow wealth\nwith expert-\nmanaged funds.",
+    headline: "Grow wealth with\nexpert-managed funds.",
     sub: "Access 60+ SEBI-registered mutual funds curated by top fund managers across equity, debt and hybrid categories.",
     statVal: "+26.2%",
-    statLabel: "Top 1Y Return",
+    statLabel: "Top 1Y return",
     badgeVal: "₹84,200 Cr",
-    badgeLabel: "Assets Under Management",
+    badgeLabel: "AUM",
   },
   {
     id: "2",
     tag: "START SMALL",
-    headline: "SIP from just\n₹500 a month.\nAnytime.",
+    headline: "SIP from just\n₹500 a month.",
     sub: "Set up automatic monthly investments and let compounding work silently over time. Cancel or pause whenever you want.",
     statVal: "2.4M+",
-    statLabel: "Active Investors",
+    statLabel: "Active investors",
     badgeVal: "₹500/mo",
-    badgeLabel: "Minimum SIP amount",
+    badgeLabel: "Min. SIP",
   },
   {
     id: "3",
     tag: "AI-POWERED ADVICE",
-    headline: "Ask our AI.\nGet the right\nfund for you.",
+    headline: "Ask our AI.\nGet the right fund.",
     sub: "Mentrafi AI analyses your goals, risk appetite, and investment horizon to recommend the perfect fund — instantly.",
     statVal: "98.2%",
     statLabel: "Recommendation accuracy",
-    badgeVal: "GPT-4o",
-    badgeLabel: "Powered by Mentrafi AI",
+    badgeVal: "Mentrafi AI",
+    badgeLabel: "Powered by",
   },
 ];
 
 // ─────────────────────────────────────────────
-// DECORATIVE CIRCLES (per slide)
+// GLOW BACKDROP
 // ─────────────────────────────────────────────
-function SlideDecorations() {
-  return (
-    <>
-      {/* Radial glow top-right */}
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          top: -80,
-          right: -80,
-          width: 280,
-          height: 280,
-          borderRadius: 140,
-          backgroundColor: "rgba(184,148,58,0.15)",
-        }}
-      />
-      {/* Large solid gold circle */}
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          top: -30,
-          right: -30,
-          width: 160,
-          height: 160,
-          borderRadius: 80,
-          backgroundColor: C.gold,
-          opacity: 0.9,
-        }}
-      />
-      {/* Ghost circle mid-right */}
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          top: 160,
-          right: -60,
-          width: 180,
-          height: 180,
-          borderRadius: 90,
-          backgroundColor: C.white06,
-          borderWidth: 1,
-          borderColor: C.white10,
-        }}
-      />
-      {/* Gold-tinted circle mid-left */}
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          top: 200,
-          left: -56,
-          width: 140,
-          height: 140,
-          borderRadius: 70,
-          backgroundColor: C.gold,
-          opacity: 0.08,
-        }}
-      />
-      {/* Ring bottom-left */}
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          bottom: 120,
-          left: -44,
-          width: 110,
-          height: 110,
-          borderRadius: 55,
-          borderWidth: 1,
-          borderColor: "rgba(184,148,58,0.14)",
-        }}
-      />
-      {/* Dot accents */}
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          top: 110,
-          left: 34,
-          width: 10,
-          height: 10,
-          borderRadius: 5,
-          backgroundColor: C.gold,
-          opacity: 0.44,
-        }}
-      />
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          top: 138,
-          left: 58,
-          width: 6,
-          height: 6,
-          borderRadius: 3,
-          backgroundColor: C.gold,
-          opacity: 0.24,
-        }}
-      />
-    </>
-  );
-}
 
-// ─────────────────────────────────────────────
-// SLIDE 1 — Line Chart Visual
-// ─────────────────────────────────────────────
-function Slide1Card() {
-  return (
-    <View
-      style={{
-        backgroundColor: "rgba(255,255,255,0.07)",
-        borderRadius: 22,
-        padding: 16,
-        borderWidth: 1,
-        borderColor: "rgba(255,255,255,0.10)",
-        marginBottom: 16,
-      }}
-    >
-      {/* Card header */}
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          marginBottom: 12,
-        }}
-      >
-        <View>
-          <Text
-            style={{
-              color: "rgba(255,255,255,0.40)",
-              fontSize: 10,
-              marginBottom: 4,
-            }}
-          >
-            Mentrafi Large Cap · FY 2024
-          </Text>
-          <Text style={{ color: "#fff", fontSize: 15, fontWeight: "600" }}>
-            Annual Performance
-          </Text>
-        </View>
-        <View style={{ alignItems: "flex-end" }}>
-          <Text style={{ color: "#b8943a", fontSize: 22, fontWeight: "700" }}>
-            +26.2%
-          </Text>
-          <Text
-            style={{
-              color: "rgba(255,255,255,0.35)",
-              fontSize: 10,
-              marginTop: 1,
-            }}
-          >
-            1Y return
-          </Text>
-        </View>
-      </View>
-
-      {/* Line chart */}
-      <View
-        style={{
-          height: 100,
-          marginBottom: 0,
-          marginTop: 8,
-        }}
-      >
-        <Svg width="100%" height="100" viewBox="0 0 300 100">
-          {/* Smooth growth curve */}
-          <Path
-            d="M 10,85 Q 40,75 75,65 T 140,45 T 205,30 T 270,20"
-            stroke="#b8943a"
-            strokeWidth="2.5"
-            fill="none"
-            strokeLinecap="round"
-          />
-        </Svg>
-      </View>
-    </View>
-  );
-}
-
-// ─────────────────────────────────────────────
-// SLIDE 2 — SIP List Visual
-// ─────────────────────────────────────────────
-function Slide2Card() {
-  const sips = [
-    {
-      fund: "Mentrafi Large Cap",
-      sip: "₹2,000/mo",
-      dur: "3 yrs",
-      val: "₹86,240",
-      gain: "+23.3%",
-    },
-    {
-      fund: "Pinnacle Balanced",
-      sip: "₹1,500/mo",
-      dur: "2 yrs",
-      val: "₹39,800",
-      gain: "+19.2%",
-    },
-    {
-      fund: "Crestline Debt Fund",
-      sip: "₹500/mo",
-      dur: "1 yr",
-      val: "₹6,312",
-      gain: "+8.4%",
-    },
-  ];
-
-  return (
-    <View
-      style={{
-        backgroundColor: "rgba(255,255,255,0.07)",
-        borderRadius: 22,
-        padding: 16,
-        borderWidth: 1,
-        borderColor: "rgba(255,255,255,0.10)",
-        marginBottom: 16,
-      }}
-    >
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 8,
-          marginBottom: 14,
-        }}
-      >
-        <View
-          style={{
-            width: 28,
-            height: 28,
-            borderRadius: 8,
-            backgroundColor: "rgba(184,148,58,0.18)",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <RefreshCw size={14} color={C.gold} />
-        </View>
-        <Text style={{ color: "#fff", fontSize: 14, fontWeight: "500" }}>
-          Active SIPs
-        </Text>
-      </View>
-
-      {sips.map((item, i) => (
-        <View key={i}>
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              paddingVertical: 10,
-            }}
-          >
-            <View style={{ flex: 1 }}>
-              <Text
-                style={{ color: "#fff", fontSize: 12, fontWeight: "600", marginBottom: 2 }}
-              >
-                {item.fund}
-              </Text>
-              <Text
-                style={{ color: "rgba(255,255,255,0.36)", fontSize: 10 }}
-              >
-                {item.sip} · {item.dur}
-              </Text>
-            </View>
-            <View style={{ alignItems: "flex-end" }}>
-              <Text
-                style={{ color: "#b8943a", fontSize: 13, fontWeight: "600" }}
-              >
-                {item.val}
-              </Text>
-              <Text
-                style={{ color: "#22c55e", fontSize: 10, marginTop: 1 }}
-              >
-                {item.gain}
-              </Text>
-            </View>
-          </View>
-          {i < sips.length - 1 && (
-            <View
-              style={{
-                borderBottomWidth: 1,
-                borderBottomColor: "rgba(255,255,255,0.07)",
-              }}
-            />
-          )}
-        </View>
-      ))}
-
-      {/* Total */}
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginTop: 10,
-          paddingTop: 10,
-          borderTopWidth: 1,
-          borderTopColor: "rgba(255,255,255,0.08)",
-        }}
-      >
-        <Text style={{ color: "rgba(255,255,255,0.38)", fontSize: 11 }}>
-          Total SIP value
-        </Text>
-        <Text style={{ color: "#fff", fontSize: 16, fontWeight: "600" }}>
-          ₹1,32,352
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-// ─────────────────────────────────────────────
-// SLIDE 3 — AI Advisor Preview
-// ─────────────────────────────────────────────
-function Slide3Card() {
-  const funds = [
-    {
-      name: "Mentrafi Large Cap",
-      match: 97,
-      risk: "Mod. High",
-      ret: "+26.2%",
-    },
-    { name: "Summit Nifty 50 Index", match: 89, risk: "Moderate", ret: "+19.3%" },
-  ];
-
-  return (
-    <View
-      style={{
-        backgroundColor: "rgba(255,255,255,0.07)",
-        borderRadius: 22,
-        padding: 16,
-        borderWidth: 1,
-        borderColor: "rgba(255,255,255,0.10)",
-        marginBottom: 16,
-      }}
-    >
-      {/* AI header */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 10,
-          marginBottom: 12,
-        }}
-      >
-        <View
-          style={{
-            width: 30,
-            height: 30,
-            borderRadius: 10,
-            backgroundColor: "rgba(184,148,58,0.18)",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <Sparkles size={14} color={C.gold} />
-        </View>
-        <View>
-          <Text style={{ color: "#fff", fontSize: 14, fontWeight: "500" }}>
-            Mentrafi AI says:
-          </Text>
-          <Text
-            style={{ color: "rgba(255,255,255,0.38)", fontSize: 10 }}
-          >
-            Based on your 5-year growth goal
-          </Text>
-        </View>
-      </View>
-
-      {/* AI message bubble */}
-      <View
-        style={{
-          backgroundColor: "rgba(184,148,58,0.10)",
-          borderRadius: 14,
-          padding: 12,
-          marginBottom: 12,
-          borderWidth: 1,
-          borderColor: "rgba(184,148,58,0.20)",
-        }}
-      >
-        <Text
-          style={{
-            color: "rgba(255,255,255,0.75)",
-            fontSize: 12,
-            lineHeight: 18,
-          }}
-        >
-          I recommend{" "}
-          <Text style={{ color: "#b8943a", fontWeight: "600" }}>
-            Mentrafi Large Cap
-          </Text>
-          {" "}(70%) and{" "}
-          <Text style={{ color: "#b8943a", fontWeight: "600" }}>
-            Nifty 50 Index
-          </Text>
-          {" "}(30%) for your portfolio.
-        </Text>
-      </View>
-
-      {/* Fund cards */}
-      {funds.map((f, i) => (
-        <View
-          key={i}
-          style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
-            alignItems: "center",
-            backgroundColor: "rgba(255,255,255,0.07)",
-            borderRadius: 12,
-            padding: 10,
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.09)",
-            marginBottom: i < funds.length - 1 ? 8 : 0,
-          }}
-        >
-          <View style={{ flex: 1 }}>
-            <Text
-              style={{ color: "#fff", fontSize: 11, fontWeight: "600", marginBottom: 2 }}
-            >
-              {f.name}
-            </Text>
-            <Text style={{ color: "rgba(255,255,255,0.36)", fontSize: 9 }}>
-              {f.risk}
-            </Text>
-          </View>
-          <View style={{ alignItems: "flex-end", gap: 4 }}>
-            <View
-              style={{
-                backgroundColor: "rgba(184,148,58,0.18)",
-                borderRadius: 10,
-                paddingHorizontal: 7,
-                paddingVertical: 2,
-                borderWidth: 1,
-                borderColor: "rgba(184,148,58,0.28)",
-              }}
-            >
-              <Text style={{ color: "#b8943a", fontSize: 9, fontWeight: "600" }}>
-                {f.match}% match
-              </Text>
-            </View>
-            <Text style={{ color: "#b8943a", fontSize: 12, fontWeight: "600" }}>
-              {f.ret}
-            </Text>
-          </View>
-        </View>
-      ))}
-
-      {/* Metrics row */}
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          marginTop: 12,
-          paddingTop: 12,
-          borderTopWidth: 1,
-          borderTopColor: "rgba(255,255,255,0.08)",
-        }}
-      >
-        {[
-          { label: "Match", val: "97%" },
-          { label: "Risk", val: "Mod." },
-          { label: "Horizon", val: "5Y+" },
-        ].map(({ label, val }) => (
-          <View key={label} style={{ flex: 1, alignItems: "center" }}>
-            <Text
-              style={{
-                color: "rgba(255,255,255,0.35)",
-                fontSize: 9,
-                marginBottom: 3,
-              }}
-            >
-              {label}
-            </Text>
-            <Text style={{ color: "#fff", fontSize: 13, fontWeight: "600" }}>
-              {val}
-            </Text>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-// ─────────────────────────────────────────────
-// SINGLE SLIDE
-// ─────────────────────────────────────────────
-function Slide({
-  item,
-  index,
-  currentIndex,
-  onSkip,
+function GlowBackdrop({
+  from,
+  to,
 }: {
-  item: (typeof SLIDES)[0];
-  index: number;
-  currentIndex: number;
-  onSkip: () => void;
+  from: string;
+  to: string;
 }) {
   return (
-    <View style={{ width: SCREEN_WIDTH, flex: 1 }}>
-      <SlideDecorations />
+    <Svg
+      width={CARD_WIDTH}
+      height={230}
+      viewBox="0 0 300 230"
+    >
+      <Defs>
+        <RadialGradient
+          id="glowA"
+          cx="50%"
+          cy="72%"
+          r="60%"
+        >
+          <Stop
+            offset="0%"
+            stopColor={from}
+            stopOpacity="0.9"
+          />
+          <Stop
+            offset="55%"
+            stopColor={to}
+            stopOpacity="0.35"
+          />
+          <Stop
+            offset="100%"
+            stopColor={to}
+            stopOpacity="0"
+          />
+        </RadialGradient>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingHorizontal: 24,
-          paddingTop: Platform.OS === "android" ? 60 : 50,
-          paddingBottom: 24,
+        <RadialGradient
+          id="glowB"
+          cx="50%"
+          cy="80%"
+          r="38%"
+        >
+          <Stop
+            offset="0%"
+            stopColor="#fff"
+            stopOpacity="0.5"
+          />
+          <Stop
+            offset="100%"
+            stopColor="#fff"
+            stopOpacity="0"
+          />
+        </RadialGradient>
+      </Defs>
+
+      <Ellipse
+        cx="150"
+        cy="165"
+        rx="150"
+        ry="95"
+        fill="url(#glowA)"
+      />
+
+      <Ellipse
+        cx="150"
+        cy="178"
+        rx="70"
+        ry="34"
+        fill="url(#glowB)"
+      />
+
+      <Ellipse
+        cx="150"
+        cy="210"
+        rx="46"
+        ry="9"
+        fill="#000"
+        opacity="0.4"
+      />
+    </Svg>
+  );
+}
+
+// ─────────────────────────────────────────────
+// ICON 1
+// ─────────────────────────────────────────────
+
+function GrowthIcon() {
+  const dx = 11;
+  const dy = 7;
+  const base = 122;
+
+  const bars = [
+    {
+      x: 26,
+      w: 20,
+      top: 96,
+      front: "url(#g1a)",
+      side: "url(#g1aSide)",
+    },
+    {
+      x: 54,
+      w: 20,
+      top: 74,
+      front: "url(#g1a)",
+      side: "url(#g1aSide)",
+    },
+    {
+      x: 82,
+      w: 20,
+      top: 50,
+      front: "url(#g1b)",
+      side: "url(#g1bSide)",
+    },
+    {
+      x: 110,
+      w: 20,
+      top: 24,
+      front: "url(#g1b)",
+      side: "url(#g1bSide)",
+    },
+  ];
+
+  return (
+    <Svg
+      width="150"
+      height="150"
+      viewBox="0 0 165 150"
+    >
+      <Defs>
+        <SvgGrad
+          id="g1a"
+          x1="0"
+          y1="0"
+          x2="0"
+          y2="1"
+        >
+          <Stop
+            offset="0%"
+            stopColor="#ff9dbc"
+          />
+          <Stop
+            offset="100%"
+            stopColor={C.pink}
+          />
+        </SvgGrad>
+
+        <SvgGrad
+          id="g1aSide"
+          x1="0"
+          y1="0"
+          x2="1"
+          y2="0"
+        >
+          <Stop
+            offset="0%"
+            stopColor="#b23360"
+          />
+          <Stop
+            offset="100%"
+            stopColor="#7a1f42"
+          />
+        </SvgGrad>
+
+        <SvgGrad
+          id="g1b"
+          x1="0"
+          y1="0"
+          x2="0"
+          y2="1"
+        >
+          <Stop
+            offset="0%"
+            stopColor="#8f6bff"
+          />
+          <Stop
+            offset="100%"
+            stopColor={C.violet}
+          />
+        </SvgGrad>
+
+        <SvgGrad
+          id="g1bSide"
+          x1="0"
+          y1="0"
+          x2="1"
+          y2="0"
+        >
+          <Stop
+            offset="0%"
+            stopColor="#4c2794"
+          />
+          <Stop
+            offset="100%"
+            stopColor="#301566"
+          />
+        </SvgGrad>
+
+        <SvgGrad
+          id="g1top"
+          x1="0"
+          y1="0"
+          x2="1"
+          y2="1"
+        >
+          <Stop
+            offset="0%"
+            stopColor="#ffffff"
+            stopOpacity="0.95"
+          />
+          <Stop
+            offset="100%"
+            stopColor="#ffffff"
+            stopOpacity="0.55"
+          />
+        </SvgGrad>
+      </Defs>
+
+      {bars.map((b, i) => (
+        <Fragment key={i}>
+          <Path
+            d={`M${b.x + b.w},${base}
+                L${b.x + b.w},${b.top}
+                L${b.x + b.w + dx},${b.top - dy}
+                L${b.x + b.w + dx},${base - dy} Z`}
+            fill={b.side}
+          />
+
+          <Path
+            d={`M${b.x},${b.top}
+                L${b.x + b.w},${b.top}
+                L${b.x + b.w + dx},${b.top - dy}
+                L${b.x + dx},${b.top - dy} Z`}
+            fill="url(#g1top)"
+          />
+
+          <Path
+            d={`M${b.x},${base}
+                L${b.x},${b.top}
+                L${b.x + b.w},${b.top}
+                L${b.x + b.w},${base} Z`}
+            fill={b.front}
+          />
+        </Fragment>
+      ))}
+
+      <Path
+        d="M22 96 L48 70 L76 82 L133 18"
+        stroke="#fff"
+        strokeWidth="3"
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity="0.95"
+      />
+
+      <Path
+        d="M115 18 L133 18 L133 36"
+        stroke="#fff"
+        strokeWidth="3"
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity="0.95"
+      />
+    </Svg>
+  );
+}
+
+// ─────────────────────────────────────────────
+// ICON 2
+// ─────────────────────────────────────────────
+
+function RecurringIcon() {
+  return (
+    <Svg
+      width="150"
+      height="150"
+      viewBox="0 0 150 150"
+    >
+      <Defs>
+        <RadialGradient
+          id="g2tube"
+          cx="50%"
+          cy="35%"
+          r="70%"
+        >
+          <Stop
+            offset="0%"
+            stopColor="#ff9dbc"
+          />
+          <Stop
+            offset="45%"
+            stopColor={C.magenta}
+          />
+          <Stop
+            offset="100%"
+            stopColor="#3d1140"
+          />
+        </RadialGradient>
+
+        <SvgGrad
+          id="g2edge"
+          x1="0"
+          y1="0"
+          x2="0"
+          y2="1"
+        >
+          <Stop
+            offset="0%"
+            stopColor={C.violet}
+            stopOpacity="0"
+          />
+          <Stop
+            offset="100%"
+            stopColor="#1a0a30"
+            stopOpacity="0.9"
+          />
+        </SvgGrad>
+      </Defs>
+
+      <Circle
+        cx="75"
+        cy="80"
+        r="44"
+        fill="none"
+        stroke="#2a1240"
+        strokeWidth="16"
+        opacity="0.55"
+      />
+
+      <Circle
+        cx="75"
+        cy="75"
+        r="44"
+        fill="none"
+        stroke="url(#g2tube)"
+        strokeWidth="18"
+      />
+
+      <Path
+        d="M35 88 A44 44 0 0 0 115 88"
+        stroke="url(#g2edge)"
+        strokeWidth="18"
+        fill="none"
+        strokeLinecap="round"
+      />
+
+      <Path
+        d="M40 55 A44 44 0 0 1 110 55"
+        stroke="#fff"
+        strokeWidth="4"
+        fill="none"
+        strokeLinecap="round"
+        opacity="0.75"
+      />
+
+      <Path
+        d="M97 40 L110 47 L100 58"
+        stroke="#fff"
+        strokeWidth="4"
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+
+      <Circle
+        cx="75"
+        cy="75"
+        r="14"
+        fill="#0a0a14"
+      />
+
+      <Circle
+        cx="75"
+        cy="75"
+        r="14"
+        fill="url(#g2tube)"
+        opacity="0.9"
+      />
+
+      <Circle
+        cx="70"
+        cy="70"
+        r="4"
+        fill="#fff"
+        opacity="0.8"
+      />
+    </Svg>
+  );
+}
+
+// ─────────────────────────────────────────────
+// ICON 3
+// ─────────────────────────────────────────────
+
+function AIIcon() {
+  return (
+    <Svg
+      width="150"
+      height="150"
+      viewBox="0 0 150 150"
+    >
+      <Defs>
+        <RadialGradient
+          id="g3sphere"
+          cx="38%"
+          cy="30%"
+          r="75%"
+        >
+          <Stop
+            offset="0%"
+            stopColor="#ffe3ee"
+          />
+          <Stop
+            offset="30%"
+            stopColor="#ff9dbc"
+          />
+          <Stop
+            offset="65%"
+            stopColor={C.pink}
+          />
+          <Stop
+            offset="100%"
+            stopColor="#4a1030"
+          />
+        </RadialGradient>
+
+        <SvgGrad
+          id="g3spark"
+          x1="0"
+          y1="0"
+          x2="1"
+          y2="1"
+        >
+          <Stop
+            offset="0%"
+            stopColor="#fff"
+          />
+          <Stop
+            offset="45%"
+            stopColor="#c9b3ff"
+          />
+          <Stop
+            offset="100%"
+            stopColor={C.violet}
+          />
+        </SvgGrad>
+
+        <RadialGradient
+          id="g3sparkShadow"
+          cx="50%"
+          cy="50%"
+          r="50%"
+        >
+          <Stop
+            offset="0%"
+            stopColor="#000"
+            stopOpacity="0.5"
+          />
+          <Stop
+            offset="100%"
+            stopColor="#000"
+            stopOpacity="0"
+          />
+        </RadialGradient>
+      </Defs>
+
+      <Ellipse
+        cx="75"
+        cy="98"
+        rx="56"
+        ry="12"
+        stroke={C.cyan}
+        strokeWidth="2"
+        fill="none"
+        opacity="0.5"
+      />
+
+      <Ellipse
+        cx="75"
+        cy="98"
+        rx="36"
+        ry="7"
+        stroke={C.cyan}
+        strokeWidth="2"
+        fill="none"
+        opacity="0.8"
+      />
+
+      <Ellipse
+        cx="75"
+        cy="103"
+        rx="24"
+        ry="7"
+        fill="url(#g3sparkShadow)"
+      />
+
+      <Circle
+        cx="75"
+        cy="80"
+        r="22"
+        fill="url(#g3sphere)"
+      />
+
+      <Circle
+        cx="67"
+        cy="71"
+        r="6"
+        fill="#fff"
+        opacity="0.55"
+      />
+
+      <Path
+        d="M75 22 L81 46 L104 52 L81 58 L75 82 L69 58 L46 52 L69 46 Z"
+        fill="url(#g3spark)"
+      />
+
+      <Path
+        d="M75 22 L81 46 L75 52 L69 46 Z"
+        fill="#fff"
+        opacity="0.6"
+      />
+
+      <Circle
+        cx="75"
+        cy="52"
+        r="5"
+        fill="#fff"
+        opacity="0.9"
+      />
+    </Svg>
+  );
+}
+
+// ─────────────────────────────────────────────
+// SLIDE CARD
+// ─────────────────────────────────────────────
+
+function SlideCard({
+  item,
+  colors,
+  Icon,
+}: {
+  item: (typeof SLIDES)[0];
+  colors: [string, string];
+Icon: () => ReactElement;
+}) {
+  return (
+    <View
+      style={{
+        width: CARD_WIDTH,
+        height: CARD_HEIGHT,
+        ...depthShadow("lg"),
+        ...cardTilt,
+      }}
+    >
+      <LinearGradient
+        colors={[C.card, "#050508"]}
+        start={{ x: 0.2, y: 0 }}
+        end={{ x: 0.8, y: 1 }}
+        style={{
+          flex: 1,
+          borderRadius: 36,
+          borderWidth: 1,
+          borderColor: C.cardEdge,
+          overflow: "hidden",
         }}
       >
-        {/* Logo/Brand mark + Skip button */}
         <View
+          pointerEvents="none"
           style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 24,
+            position: "absolute",
+            top: -40,
+            left: -60,
+            width: 140,
+            height: CARD_HEIGHT + 120,
+            backgroundColor: "rgba(255,255,255,0.05)",
+            transform: [{ rotate: "18deg" }],
           }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <View
-              style={{
-                width: 24,
-                height: 24,
-                borderRadius: 12,
-                borderWidth: 1.5,
-                borderColor: C.gold,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: "rgba(184,148,58,0.08)",
-              }}
-            >
-              <View
-                style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: 3.5,
-                  borderWidth: 1.5,
-                  borderColor: C.gold,
-                }}
-              />
-            </View>
-            <Text
-              style={{
-                color: "#fff",
-                fontSize: 16,
-                fontWeight: "600",
-                fontFamily: titleFont,
-              }}
-            >
-              Mentrafi
-            </Text>
-          </View>
+        />
 
-          {/* Skip button - inline */}
-          {index < SLIDES.length - 1 && (
-            <TouchableOpacity
-              onPress={onSkip}
-              activeOpacity={0.7}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 4,
-                paddingHorizontal: 14,
-                paddingVertical: 7,
-                backgroundColor: "rgba(184,148,58,0.20)",
-                borderRadius: 20,
-              }}
-            >
-              <Text style={{ color: "#fff", fontSize: 13, fontWeight: "500" }}>
-                Skip
-              </Text>
-              <ArrowRight size={14} color="#fff" />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Tag */}
         <View
           style={{
-            alignSelf: "flex-start",
-            flexDirection: "row",
+            height: 232,
             alignItems: "center",
-            gap: 6,
-            backgroundColor: "rgba(184,148,58,0.15)",
-            borderRadius: 20,
-            paddingHorizontal: 12,
-            paddingVertical: 5,
-            borderWidth: 1,
-            borderColor: "rgba(184,148,58,0.28)",
-            marginBottom: 18,
+            justifyContent: "flex-end",
           }}
         >
           <View
             style={{
-              width: 6,
-              height: 6,
-              borderRadius: 3,
-              backgroundColor: "#b8943a",
+              position: "absolute",
+              bottom: 0,
             }}
-          />
+          >
+            <GlowBackdrop
+              from={colors[0]}
+              to={colors[1]}
+            />
+          </View>
+
+          <View
+            style={{
+              marginBottom: 34,
+              ...depthShadow("md"),
+            }}
+          >
+            <Icon />
+          </View>
+        </View>
+
+        <View
+          style={{
+            paddingHorizontal: 26,
+            flex: 1,
+          }}
+        >
           <Text
             style={{
-              color: "#b8943a",
+              color: colors[0],
               fontSize: 10,
-              fontWeight: "600",
-              letterSpacing: 0.7,
+              fontWeight: "700",
+              letterSpacing: 1.2,
+              marginBottom: 10,
             }}
           >
             {item.tag}
           </Text>
-        </View>
 
-        {/* Headline */}
-        <Text
-          style={{
-            color: "#fff",
-            fontSize: 36,
-            lineHeight: 42,
-            fontWeight: "500",
-            marginBottom: 12,
-            fontFamily: titleFont,
-          }}
-        >
-          {item.headline}
-        </Text>
-
-        {/* Subtext */}
-        <Text
-          style={{
-            color: C.white42,
-            fontSize: 13,
-            lineHeight: 20,
-            marginBottom: 20,
-          }}
-        >
-          {item.sub}
-        </Text>
-
-        {/* Visual card */}
-        {index === 0 && <Slide1Card />}
-        {index === 1 && <Slide2Card />}
-        {index === 2 && <Slide3Card />}
-
-        {/* Stat pills */}
-        <View style={{ flexDirection: "row", gap: 10 }}>
-          <View
+          <Text
             style={{
-              backgroundColor: "rgba(184,148,58,0.16)",
-              borderRadius: 16,
-              paddingHorizontal: 16,
-              paddingVertical: 11,
-              borderWidth: 1,
-              borderColor: "rgba(184,148,58,0.30)",
+              color: "#fff",
+              fontSize: 23,
+              lineHeight: 29,
+              fontWeight: "700",
+              marginBottom: 10,
             }}
           >
-            <Text style={{ color: "#b8943a", fontSize: 17, fontWeight: "700" }}>
-              {item.statVal}
-            </Text>
-            <Text
-              style={{
-                color: "rgba(255,255,255,0.50)",
-                fontSize: 11,
-                marginTop: 2,
-              }}
-            >
-              {item.statLabel}
-            </Text>
-          </View>
-          <View
+            {item.headline}
+          </Text>
+
+          <Text
             style={{
-              backgroundColor: "rgba(255,255,255,0.08)",
-              borderRadius: 16,
-              paddingHorizontal: 16,
-              paddingVertical: 11,
-              borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.12)",
+              color: C.textMuted,
+              fontSize: 12.5,
+              lineHeight: 19,
             }}
           >
-            <Text
-              style={{
-                color: "rgba(255,255,255,0.75)",
-                fontSize: 14,
-                fontWeight: "700",
-                marginBottom: 1,
-              }}
-            >
-              {item.badgeVal}
-            </Text>
-            <Text
-              style={{ color: "rgba(255,255,255,0.35)", fontSize: 10 }}
-            >
-              {item.badgeLabel}
-            </Text>
+            {item.sub}
+          </Text>
+
+          <View
+            style={{
+              flexDirection: "row",
+              marginTop: "auto",
+              marginBottom: 22,
+              paddingTop: 14,
+              borderTopWidth: 1,
+              borderTopColor: "rgba(255,255,255,0.07)",
+              gap: 22,
+            }}
+          >
+            <View>
+              <Text
+                style={{
+                  color: "#fff",
+                  fontSize: 14,
+                  fontWeight: "700",
+                }}
+              >
+                {item.statVal}
+              </Text>
+
+              <Text
+                style={{
+                  color: C.textFaint,
+                  fontSize: 9.5,
+                  marginTop: 2,
+                }}
+              >
+                {item.statLabel}
+              </Text>
+            </View>
+
+            <View>
+              <Text
+                style={{
+                  color: "#fff",
+                  fontSize: 14,
+                  fontWeight: "700",
+                }}
+              >
+                {item.badgeVal}
+              </Text>
+
+              <Text
+                style={{
+                  color: C.textFaint,
+                  fontSize: 9.5,
+                  marginTop: 2,
+                }}
+              >
+                {item.badgeLabel}
+              </Text>
+            </View>
           </View>
         </View>
-      </ScrollView>
+      </LinearGradient>
     </View>
   );
 }
 
 // ─────────────────────────────────────────────
+// FLOATING SPHERE
+// ─────────────────────────────────────────────
+
+function FloatingSphere({
+  size,
+  top,
+  left,
+  right,
+  color,
+  opacity = 0.5,
+}: {
+  size: number;
+  top: number;
+  left?: number;
+  right?: number;
+  color: string;
+  opacity?: number;
+}) {
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        top,
+        left,
+        right,
+        opacity,
+      }}
+    >
+      <Svg
+        width={size}
+        height={size}
+        viewBox="0 0 100 100"
+      >
+        <Defs>
+          <RadialGradient
+            id={`sph-${size}-${top}`}
+            cx="35%"
+            cy="30%"
+            r="75%"
+          >
+            <Stop
+              offset="0%"
+              stopColor="#fff"
+              stopOpacity="0.9"
+            />
+
+            <Stop
+              offset="35%"
+              stopColor={color}
+              stopOpacity="0.85"
+            />
+
+            <Stop
+              offset="100%"
+              stopColor={color}
+              stopOpacity="0.05"
+            />
+          </RadialGradient>
+        </Defs>
+
+        <Circle
+          cx="50"
+          cy="50"
+          r="46"
+          fill={`url(#sph-${size}-${top})`}
+        />
+      </Svg>
+    </View>
+  );
+}
+
+const ICON_MAP = [
+  GrowthIcon,
+  RecurringIcon,
+  AIIcon,
+];
+
+const GLOW_COLORS: [string, string][] = [
+  [C.pink, C.violet],
+  [C.magenta, C.violet],
+  [C.pink, C.cyan],
+];
+
+// ─────────────────────────────────────────────
 // ONBOARDING SCREEN
 // ─────────────────────────────────────────────
+
 export default function OnboardingScreen() {
+  const router = useRouter();
   const [currentIndex, setCurrentIndex] = useState(0);
+
   const flatListRef = useRef<FlatList>(null);
 
+  // IMPORTANT:
+  // After onboarding, go directly to LOGIN.
   async function handleFinish() {
-    // Mark onboarding as completed
-    await AsyncStorage.setItem("hasSeenOnboarding", "true");
-    // Navigate to auth screen
-    router.replace("/(auth)");
+    try {
+      await AsyncStorage.setItem(
+        "hasSeenOnboarding",
+        "true"
+      );
+
+      router.replace("/(auth)/login");
+    } catch (error) {
+      console.error(
+        "Failed to save onboarding status:",
+        error
+      );
+
+      router.replace("/(auth)/login");
+    }
   }
 
   function goNext() {
     if (currentIndex < SLIDES.length - 1) {
       const next = currentIndex + 1;
-      flatListRef.current?.scrollToIndex({ index: next, animated: true });
+
+      flatListRef.current?.scrollToIndex({
+        index: next,
+        animated: true,
+      });
+
       setCurrentIndex(next);
     } else {
       handleFinish();
     }
   }
 
-  function goToSlide(index: number) {
-    flatListRef.current?.scrollToIndex({ index, animated: true });
-    setCurrentIndex(index);
-  }
+  const isLast =
+    currentIndex === SLIDES.length - 1;
 
   return (
-    <View style={{ flex: 1, backgroundColor: C.navy }}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-      <View style={{ flex: 1, paddingTop: Platform.OS === "android" ? 0 : 0 }}>
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: C.bgBottom,
+      }}
+    >
+      {/* Background */}
+      <LinearGradient
+        colors={[
+          C.bgTop,
+          C.bgMid,
+          C.bgBottom,
+        ]}
+        start={{
+          x: 0.15,
+          y: 0,
+        }}
+        end={{
+          x: 0.85,
+          y: 1,
+        }}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+        }}
+      />
 
-        {/* ── SLIDES ── */}
+      {/* Corner glow */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: -120,
+          left: -100,
+          width: 300,
+          height: 300,
+          borderRadius: 150,
+          backgroundColor:
+            "rgba(123,63,242,0.18)",
+        }}
+      />
+
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          bottom: -140,
+          right: -100,
+          width: 300,
+          height: 300,
+          borderRadius: 150,
+          backgroundColor:
+            "rgba(51,217,232,0.10)",
+        }}
+      />
+
+      {/* Floating spheres */}
+      <FloatingSphere
+        size={70}
+        top={90}
+        left={18}
+        color={C.violet}
+        opacity={0.45}
+      />
+
+      <FloatingSphere
+        size={46}
+        top={SCREEN_HEIGHT * 0.62}
+        right={26}
+        color={C.cyan}
+        opacity={0.4}
+      />
+
+      <FloatingSphere
+        size={30}
+        top={140}
+        right={40}
+        color={C.pink}
+        opacity={0.35}
+      />
+
+      {/* Skip */}
+      {!isLast && (
+        <TouchableOpacity
+          onPress={handleFinish}
+          activeOpacity={0.7}
+          style={{
+            position: "absolute",
+            top:
+              Platform.OS === "android"
+                ? 46
+                : 58,
+            right: 24,
+            zIndex: 10,
+          }}
+        >
+          <Text
+            style={{
+              color: C.textMuted,
+              fontSize: 13,
+              fontWeight: "500",
+            }}
+          >
+            Skip
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Slides */}
+      <View
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          paddingTop:
+            Platform.OS === "android"
+              ? 20
+              : 0,
+        }}
+      >
         <FlatList
           ref={flatListRef}
           data={SLIDES}
@@ -830,75 +1096,128 @@ export default function OnboardingScreen() {
           scrollEnabled={false}
           showsHorizontalScrollIndicator={false}
           keyExtractor={(item) => item.id}
-          renderItem={({ item, index }) => (
-            <Slide
-              item={item}
-              index={index}
-              currentIndex={currentIndex}
-              onSkip={handleFinish}
-            />
-          )}
-          style={{ flex: 1 }}
+          onMomentumScrollEnd={(e) => {
+            const idx = Math.round(
+              e.nativeEvent.contentOffset.x /
+                SCREEN_WIDTH
+            );
+
+            setCurrentIndex(idx);
+          }}
+          renderItem={({ item, index }) => {
+            const Icon = ICON_MAP[index];
+
+            return (
+              <View
+                style={{
+                  width: SCREEN_WIDTH,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <SlideCard
+                  item={item}
+                  colors={GLOW_COLORS[index]}
+                  Icon={Icon}
+                />
+              </View>
+            );
+          }}
+          style={{
+            flexGrow: 0,
+          }}
         />
 
-        {/* ── BOTTOM BAR ── */}
+        {/* Pagination dots */}
         <View
           style={{
             flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            paddingHorizontal: 24,
-            paddingVertical: 20,
-            borderTopWidth: 1,
-            borderTopColor: "rgba(255,255,255,0.06)",
+            gap: 7,
+            marginTop: 22,
           }}
         >
-          {/* Dots */}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            {SLIDES.map((_, i) => (
-              <TouchableOpacity
-                key={i}
-                onPress={() => goToSlide(i)}
-                activeOpacity={0.8}
-              >
-                <View
-                  style={{
-                    height: 7,
-                    borderRadius: 4,
-                    width: i === currentIndex ? 24 : 7,
-                    backgroundColor:
-                      i === currentIndex ? C.gold : "rgba(255,255,255,0.22)",
-                  }}
-                />
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Next / Get Started button */}
-          <TouchableOpacity
-            onPress={goNext}
-            activeOpacity={0.85}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 7,
-              backgroundColor: "#b8943a",
-              borderRadius: 28,
-              paddingHorizontal: 22,
-              paddingVertical: 13,
-            }}
-          >
-            <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>
-              {currentIndex < SLIDES.length - 1 ? "Next" : "Get Started"}
-            </Text>
-            {currentIndex < SLIDES.length - 1 ? (
-              <ArrowRight size={16} color="#fff" />
-            ) : (
-              <ChevronRight size={16} color="#fff" />
-            )}
-          </TouchableOpacity>
+          {SLIDES.map((_, i) => (
+            <View
+              key={i}
+              style={{
+                width:
+                  i === currentIndex ? 18 : 6,
+                height: 6,
+                borderRadius: 3,
+                backgroundColor:
+                  i === currentIndex
+                    ? "#fff"
+                    : "rgba(255,255,255,0.22)",
+              }}
+            />
+          ))}
         </View>
       </View>
+
+      {/* Next / Get Started */}
+      <TouchableOpacity
+        onPress={goNext}
+        activeOpacity={0.88}
+        style={{
+          position: "absolute",
+          bottom: 40,
+          right: 28,
+          ...depthShadow("lg"),
+        }}
+      >
+        <LinearGradient
+          colors={[C.pink, C.violet]}
+          start={{
+            x: 0,
+            y: 0,
+          }}
+          end={{
+            x: 1,
+            y: 1,
+          }}
+          style={{
+            width: isLast
+              ? undefined
+              : 58,
+            height: 58,
+            minWidth: isLast
+              ? 168
+              : 58,
+            borderRadius: 29,
+            alignItems: "center",
+            justifyContent: "center",
+            flexDirection: "row",
+            paddingHorizontal: isLast
+              ? 22
+              : 0,
+            gap: 8,
+          }}
+        >
+          {isLast ? (
+            <>
+              <Text
+                style={{
+                  color: "#fff",
+                  fontSize: 14,
+                  fontWeight: "700",
+                }}
+              >
+                Get Started
+              </Text>
+
+              <Check
+                size={17}
+                color="#fff"
+              />
+            </>
+          ) : (
+            <ArrowRight
+              size={22}
+              color="#fff"
+            />
+          )}
+        </LinearGradient>
+      </TouchableOpacity>
     </View>
   );
 }

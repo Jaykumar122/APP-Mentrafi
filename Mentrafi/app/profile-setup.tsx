@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+﻿import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { ArrowRight, Cake, Shield, Target as TargetIcon, Wallet } from "lucide-react-native";
@@ -10,7 +10,7 @@ import Svg, {
   RadialGradient,
   Stop,
 } from "react-native-svg";
-import { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -96,7 +96,7 @@ function TextAreaField({
   value,
   onChangeText,
 }: {
-  icon: JSX.Element;
+  icon: React.ReactElement;
   placeholder: string;
   value: string;
   onChangeText: (v: string) => void;
@@ -138,6 +138,10 @@ function TextAreaField({
 // ─────────────────────────────────────────────
 // PROFILE SETUP SCREEN
 // ─────────────────────────────────────────────
+const RISK_OPTIONS = ["Low", "Moderate", "High"] as const;
+const MIN_AGE = 18;
+const MAX_AGE = 100;
+
 export default function ProfileSetup() {
   const router = useRouter();
   const [age, setAge] = useState("");
@@ -146,7 +150,58 @@ export default function ProfileSetup() {
   const [investmentGoal, setInvestmentGoal] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Validation: All fields must be filled
+  const isFormValid = age.trim() !== "" && 
+                       monthlySipBudget.trim() !== "" && 
+                       riskAppetite.trim() !== "" && 
+                       investmentGoal.trim() !== "";
+
+  // Prevent back navigation - user must complete profile setup
+  useEffect(() => {
+    const handleBackPress = () => {
+      Alert.alert(
+        "Complete Your Profile",
+        "Please complete your profile setup to continue using the app.",
+        [{ text: "OK" }]
+      );
+      return true; // Prevent default back action
+    };
+
+    // Note: For web/expo-router, back button is handled automatically
+    // For native Android back button, you'd need BackHandler
+    // The router.replace() in _layout.tsx already prevents going back
+
+    return () => {};
+  }, []);
+
+  function adjustAge(delta: number) {
+    const current = parseInt(age, 10);
+    const base = isNaN(current) ? MIN_AGE : current;
+    const next = Math.min(MAX_AGE, Math.max(MIN_AGE, base + delta));
+    setAge(String(next));
+  }
+
   async function handleSubmit() {
+    // Validate before submitting
+    if (!isFormValid) {
+      Alert.alert("Incomplete", "Please fill in all fields to continue.");
+      return;
+    }
+
+    // Validate age is within acceptable range
+    const ageNum = parseInt(age.trim(), 10);
+    if (isNaN(ageNum) || ageNum < MIN_AGE || ageNum > MAX_AGE) {
+      Alert.alert("Invalid Age", `Please enter an age between ${MIN_AGE} and ${MAX_AGE}.`);
+      return;
+    }
+
+    // Validate SIP budget is a positive number
+    const budgetNum = parseFloat(monthlySipBudget.trim());
+    if (isNaN(budgetNum) || budgetNum <= 0) {
+      Alert.alert("Invalid Budget", "Please enter a positive monthly SIP budget.");
+      return;
+    }
+
     setLoading(true);
     try {
       const token = await AsyncStorage.getItem("userToken");
@@ -162,10 +217,10 @@ export default function ProfileSetup() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          age: age.trim() ? parseInt(age.trim(), 10) : null,
-          monthlySipBudget: monthlySipBudget.trim() ? parseFloat(monthlySipBudget.trim()) : null,
-          riskAppetite: riskAppetite.trim() || null,
-          investmentGoal: investmentGoal.trim() || null,
+          age: ageNum,
+          monthlySipBudget: budgetNum,
+          riskAppetite: riskAppetite.trim(),
+          investmentGoal: investmentGoal.trim(),
         }),
       });
 
@@ -174,8 +229,12 @@ export default function ProfileSetup() {
         throw new Error(err.error || "Failed to save profile");
       }
 
-      // success: send user to home
-      router.replace("/(tabs)/home");
+      // Clear the pending profile setup flag
+      await AsyncStorage.removeItem("pendingProfileSetup");
+
+      // success: send user to their profile so they can fill in the rest
+      // of their personal information (name, phone, DOB, gender, location).
+      router.replace("/(tabs)/profile?openEditor=1" as any);
     } catch (err: any) {
       console.error("Profile setup save error:", err);
       Alert.alert("Save failed", err?.message || "Could not save profile");
@@ -270,27 +329,142 @@ export default function ProfileSetup() {
                   A few quick questions to personalize your recommendations.
                 </Text>
 
-                <FieldInput
-                  icon={<Cake size={18} color={C.textMuted} />}
-                  placeholder="Age"
-                  value={age}
-                  onChangeText={setAge}
-                  keyboardType="number-pad"
-                />
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    backgroundColor: C.input,
+                    borderWidth: 1,
+                    borderColor: C.inputBorder,
+                    borderRadius: 16,
+                    paddingHorizontal: 8,
+                    paddingVertical: 6,
+                    marginBottom: 14,
+                  }}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      flex: 1,
+                      paddingLeft: 8,
+                    }}
+                  >
+                    <Cake size={18} color={C.textMuted} />
+                    <Text style={{ color: C.textFaint, fontSize: 13, marginLeft: 12 }}>Age</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => adjustAge(-1)}
+                    activeOpacity={0.75}
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 10,
+                      backgroundColor: "rgba(255,255,255,0.06)",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700", marginTop: -2 }}>−</Text>
+                  </TouchableOpacity>
+                  <TextInput
+                    value={age}
+                    onChangeText={(v) => {
+                      const numValue = v.replace(/[^0-9]/g, "");
+                      if (numValue === "") {
+                        setAge("");
+                      } else {
+                        const num = parseInt(numValue, 10);
+                        if (num > MAX_AGE) {
+                          setAge(String(MAX_AGE));
+                        } else {
+                          setAge(numValue);
+                        }
+                      }
+                    }}
+                    keyboardType="number-pad"
+                    placeholder="—"
+                    placeholderTextColor={C.textFaint}
+                    maxLength={3}
+                    style={{
+                      width: 44,
+                      textAlign: "center",
+                      color: "#fff",
+                      fontSize: 15,
+                      fontWeight: "700",
+                    }}
+                  />
+                  <TouchableOpacity
+                    onPress={() => adjustAge(1)}
+                    activeOpacity={0.75}
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 10,
+                      backgroundColor: "rgba(255,255,255,0.06)",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>+</Text>
+                  </TouchableOpacity>
+                </View>
                 <FieldInput
                   icon={<Wallet size={18} color={C.textMuted} />}
                   placeholder="Monthly SIP budget (₹)"
                   value={monthlySipBudget}
                   onChangeText={setMonthlySipBudget}
-                  keyboardType="decimal-pad"
+                  keyboardType="default"
                 />
-                <FieldInput
-                  icon={<Shield size={18} color={C.textMuted} />}
-                  placeholder="Risk appetite (Low / Medium / High)"
-                  value={riskAppetite}
-                  onChangeText={setRiskAppetite}
-                  autoCapitalize="words"
-                />
+                <View style={{ marginBottom: 14 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8, paddingLeft: 2 }}>
+                    <Shield size={16} color={C.textMuted} />
+                    <Text style={{ color: C.textFaint, fontSize: 13, marginLeft: 12 }}>Risk appetite</Text>
+                  </View>
+                  <View style={{ flexDirection: "row", gap: 10 }}>
+                    {RISK_OPTIONS.map((level) => {
+                      const selected = riskAppetite === level;
+                      return (
+                        <TouchableOpacity
+                          key={level}
+                          onPress={() => setRiskAppetite(level)}
+                          activeOpacity={0.85}
+                          style={{ flex: 1 }}
+                        >
+                          {selected ? (
+                            <LinearGradient
+                              colors={[C.pink, C.violet]}
+                              start={{ x: 0, y: 0 }}
+                              end={{ x: 1, y: 1 }}
+                              style={{
+                                borderRadius: 14,
+                                paddingVertical: 12,
+                                alignItems: "center",
+                              }}
+                            >
+                              <Text style={{ color: "#fff", fontSize: 13, fontWeight: "700" }}>{level}</Text>
+                            </LinearGradient>
+                          ) : (
+                            <View
+                              style={{
+                                borderRadius: 14,
+                                paddingVertical: 12,
+                                alignItems: "center",
+                                backgroundColor: C.input,
+                                borderWidth: 1,
+                                borderColor: C.inputBorder,
+                              }}
+                            >
+                              <Text style={{ color: C.textMuted, fontSize: 13, fontWeight: "600" }}>
+                                {level}
+                              </Text>
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
                 <TextAreaField
                   icon={<TargetIcon size={18} color={C.textMuted} />}
                   placeholder="Investment goal — e.g. Retirement planning, 10 years"
@@ -301,11 +475,11 @@ export default function ProfileSetup() {
                 <TouchableOpacity
                   onPress={handleSubmit}
                   activeOpacity={0.88}
-                  disabled={loading}
-                  style={{ ...depthShadow("md"), opacity: loading ? 0.75 : 1, marginTop: 8 }}
+                  disabled={loading || !isFormValid}
+                  style={{ ...depthShadow("md"), opacity: (loading || !isFormValid) ? 0.5 : 1, marginTop: 8 }}
                 >
                   <LinearGradient
-                    colors={[C.pink, C.violet]}
+                    colors={isFormValid ? [C.pink, C.violet] : ["#666", "#444"]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={{
@@ -337,3 +511,5 @@ export default function ProfileSetup() {
     </View>
   );
 }
+
+
